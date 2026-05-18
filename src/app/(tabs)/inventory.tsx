@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, FlatList, TextInput, Pressable, Image, ScrollView, Alert } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TextInput, Pressable, Image, ScrollView, Alert, Modal } from 'react-native';
 import { useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -6,11 +6,16 @@ import { useRouter } from 'expo-router';
 import { useInventory, CATEGORIES_META } from '../../context/InventoryContext';
 
 export default function Inventory() {
-  const { items, deleteItem, colors, formatDisplayWeight, categories } = useInventory();
+  const { items, packs, deleteItem, colors, formatDisplayWeight, categories } = useInventory();
   const router = useRouter();
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeCategory, setActiveCategory] = useState<string | null>(null);
+  const [activeFilters, setActiveFilters] = useState<string[]>([]);
+  const [isFilterModalVisible, setIsFilterModalVisible] = useState(false);
+  const [tempFilters, setTempFilters] = useState<string[]>([]);
+
+  const userName = "Amine KFI"; // Renseigné pour la démo bêta
+  const greeting = userName ? `Bonjour, ${userName}` : "Bonjour, Randonneur";
 
   const confirmDelete = (id: string) => {
     Alert.alert(
@@ -54,14 +59,15 @@ export default function Inventory() {
   const filteredItems = items.filter(item => {
     const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
                           (item.brand && item.brand.toLowerCase().includes(searchQuery.toLowerCase()));
-    const matchesCategory = activeCategory === 'Tout' ? true : (activeCategory ? item.category === activeCategory : true);
+    const matchesCategory = activeFilters.length === 0 ? true : activeFilters.includes(item.category);
     return matchesSearch && matchesCategory;
   });
 
-  const displayCategories = ['Tout', ...categories];
+  const hasActiveFilter = activeFilters.length > 0;
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+      {/* Barre de Recherche et Bouton de Filtre */}
       <View style={[styles.header, { backgroundColor: colors.background }]}>
         <View style={[styles.searchBar, { backgroundColor: colors.card }]}>
           <Ionicons name="search" size={20} color={colors.subText} />
@@ -73,43 +79,37 @@ export default function Inventory() {
             onChangeText={setSearchQuery}
           />
         </View>
-        <Pressable style={[styles.filterButton, { backgroundColor: colors.card }]}>
-          <Ionicons name="options" size={20} color={colors.text} />
+        <Pressable 
+          style={[styles.filterButton, { backgroundColor: colors.card }]}
+          onPress={() => {
+            setTempFilters(activeFilters);
+            setIsFilterModalVisible(true);
+          }}
+        >
+          <Ionicons 
+            name="options" 
+            size={20} 
+            color={hasActiveFilter ? colors.primary : colors.text} 
+          />
         </Pressable>
       </View>
 
+      {/* En-tête Utilisateur Adaptatif */}
       <View style={styles.profileSection}>
-        <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
-          <Ionicons name="person" size={24} color="#FFFFFF" />
+        <View style={[styles.avatar, { backgroundColor: colors.primary + '20' }]}>
+          <Text style={[styles.avatarText, { color: colors.primary }]}>
+            {userName ? userName.split(' ').map(n => n[0]).join('') : 'R'}
+          </Text>
         </View>
         <View style={styles.profileInfo}>
-          <Text style={[styles.profileName, { color: colors.text }]}>Utilisateur Trek</Text>
-          <Text style={[styles.profileStats, { color: colors.subText }]}>{items.length} Objets • 0 Sacs créés</Text>
+          <Text style={[styles.profileName, { color: colors.text }]}>{greeting}</Text>
+          <Text style={[styles.profileStats, { color: colors.subText }]}>
+            {items.length} {items.length > 1 ? 'Objets' : 'Objet'} • {packs.length} {packs.length > 1 ? 'Sacs créés' : 'Sac créé'}
+          </Text>
         </View>
       </View>
 
-      <View style={styles.categoriesWrapper}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categories}>
-          {displayCategories.map((catName) => {
-            const isAll = catName === 'Tout';
-            const isActive = isAll
-              ? (!activeCategory || activeCategory === 'Tout')
-              : activeCategory === catName;
-            const meta = CATEGORIES_META[catName];
-            return (
-              <Pressable 
-                key={catName}
-                style={[styles.catButton, { backgroundColor: isActive ? colors.primary : colors.card, borderColor: isActive ? colors.primary : colors.border }]}
-                onPress={() => setActiveCategory(catName)}
-              >
-                {!isAll && meta && <Ionicons name={meta.icon as any} size={16} color={isActive ? '#FFFFFF' : colors.subText} />}
-                <Text style={[styles.catButtonText, { marginLeft: isAll ? 0 : 6, color: isActive ? '#FFFFFF' : colors.subText }]}>{catName}</Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
-      </View>
-
+      {/* Grille d'Inventaire */}
       <FlatList
         data={filteredItems}
         keyExtractor={item => item.id}
@@ -120,12 +120,80 @@ export default function Inventory() {
         renderItem={renderItem}
       />
 
+      {/* Bouton FAB d'Ajout */}
       <View style={styles.mainFabContainer} pointerEvents="box-none">
         <Pressable style={[styles.mainFab, { backgroundColor: colors.primary, shadowColor: colors.primary }]} onPress={() => router.push('/add-item')}>
           <Ionicons name="add" size={24} color="#FFFFFF" />
           <Text style={styles.mainFabText}>Ajouter un objet</Text>
         </Pressable>
       </View>
+
+      {/* Modal thématique de Filtrage par Catégorie (Multi-sélection) */}
+      <Modal visible={isFilterModalVisible} transparent animationType="fade" onRequestClose={() => setIsFilterModalVisible(false)}>
+        <Pressable style={styles.modalOverlay} onPress={() => setIsFilterModalVisible(false)}>
+          <Pressable style={[styles.modalContent, { backgroundColor: colors.card, maxHeight: '80%' }]} onPress={(e) => e.stopPropagation()}>
+            <Text style={[styles.modalTitle, { color: colors.text }]}>Filtrer par catégorie</Text>
+            <Text style={{ fontSize: 13, color: colors.subText, marginBottom: 8 }}>
+              Sélectionnez une ou plusieurs catégories. Si aucune n'est cochée, tout sera affiché.
+            </Text>
+            
+            <ScrollView style={{ marginVertical: 12 }} showsVerticalScrollIndicator={false}>
+              {/* Liste des catégories dynamiques */}
+              {categories.map(cat => {
+                const isActive = tempFilters.includes(cat);
+                const meta = CATEGORIES_META[cat];
+                const icon = meta?.icon || 'cube-outline';
+                return (
+                  <Pressable
+                    key={cat}
+                    style={({ pressed }) => [
+                      styles.filterItem,
+                      { 
+                        backgroundColor: isActive ? colors.primary + '15' : colors.background,
+                        borderColor: isActive ? colors.primary : colors.border,
+                        opacity: pressed ? 0.7 : 1
+                      }
+                    ]}
+                    onPress={() => {
+                      if (isActive) {
+                        setTempFilters(tempFilters.filter(f => f !== cat));
+                      } else {
+                        setTempFilters([...tempFilters, cat]);
+                      }
+                    }}
+                  >
+                    <Ionicons name={icon as any} size={20} color={isActive ? colors.primary : colors.subText} />
+                    <Text style={[styles.filterItemText, { color: colors.text, fontWeight: isActive ? '700' : '500' }]}>
+                      {cat}
+                    </Text>
+                    <View style={[styles.checkbox, { borderColor: isActive ? colors.primary : colors.border, backgroundColor: isActive ? colors.primary : 'transparent' }]}>
+                      {isActive && <Ionicons name="checkmark" size={14} color="#FFFFFF" />}
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+
+            <View style={styles.modalActionsRow}>
+              <Pressable 
+                style={[styles.modalActionBtn, { backgroundColor: colors.border, flex: 1 }]} 
+                onPress={() => setTempFilters([])}
+              >
+                <Text style={[styles.modalActionText, { color: colors.text }]}>Réinitialiser</Text>
+              </Pressable>
+              <Pressable 
+                style={[styles.modalActionBtn, { backgroundColor: colors.primary, flex: 1 }]} 
+                onPress={() => {
+                  setActiveFilters(tempFilters);
+                  setIsFilterModalVisible(false);
+                }}
+              >
+                <Text style={[styles.modalActionText, { color: '#FFFFFF', fontWeight: '700' }]}>Appliquer</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -191,34 +259,75 @@ const styles = StyleSheet.create({
     color: '#666666',
     marginTop: 4,
   },
-  categoriesWrapper: {
-    marginBottom: 24,
+  avatarText: {
+    fontSize: 20,
+    fontWeight: '700',
   },
-  categories: {
-    paddingHorizontal: 20,
-    gap: 8,
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
   },
-  catButton: {
+  modalContent: {
+    width: '100%',
+    borderRadius: 24,
+    padding: 24,
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 16,
+  },
+  modalCancelBtn: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+  },
+  modalCancelText: {
+    fontWeight: '600',
+  },
+  filterItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
+    padding: 14,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#EAEAEA',
+    marginBottom: 8,
+    gap: 12,
   },
-  catActive: {
-    backgroundColor: '#34A853',
-    borderColor: '#34A853',
-  },
-  catButtonText: {
+  filterItemText: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#666666',
+    flex: 1,
   },
-  catActiveText: {
-    color: '#FFFFFF',
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalActionsRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 12,
+  },
+  modalActionBtn: {
+    paddingVertical: 14,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalActionText: {
+    fontSize: 15,
+    fontWeight: '600',
   },
   listContent: {
     paddingHorizontal: 20,

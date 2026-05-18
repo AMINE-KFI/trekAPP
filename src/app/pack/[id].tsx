@@ -109,9 +109,13 @@ export default function PackBuilder() {
             const color = CATEGORIES_META[pi.item.category]?.color || '#999';
             return (
               <View key={pi.item.id} style={[styles.itemCard, { backgroundColor: colors.card }]}>
-                <View style={[styles.iconBox, { backgroundColor: color + '20' }]}>
-                  <Ionicons name={icon as any} size={24} color={color} />
-                </View>
+                {pi.item.imageUri ? (
+                  <Image source={{ uri: pi.item.imageUri }} style={styles.itemImage} />
+                ) : (
+                  <View style={[styles.iconBox, { backgroundColor: color + '20' }]}>
+                    <Ionicons name={icon as any} size={24} color={color} />
+                  </View>
+                )}
                 <View style={styles.itemInfo}>
                   <Text style={[styles.itemName, { color: colors.text }]}>{pi.item.name}</Text>
                   <Text style={[styles.itemWeight, { color: colors.subText }]}>{formatDisplayWeight(pi.item.weight)} {pi.item.isConsumable && '(Conso)'}</Text>
@@ -295,6 +299,12 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
+    marginRight: 16,
+  },
+  itemImage: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
     marginRight: 16,
   },
   itemInfo: {

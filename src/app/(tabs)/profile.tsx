@@ -1,26 +1,37 @@
-import { View, Text, StyleSheet, Pressable, ScrollView, Alert, TextInput } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ScrollView, Alert, TextInput, Modal, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
-import Constants from 'expo-constants';
 import { useInventory, ThemeType, WeightUnit } from '../../context/InventoryContext';
 
 export default function Profile() {
-  const { clearAllData, theme, setTheme, colors, weightUnit, setWeightUnit, categories, addCategory, removeCategory } = useInventory();
+  const { 
+    clearAllData, 
+    theme, 
+    setTheme, 
+    colors, 
+    weightUnit, 
+    setWeightUnit, 
+    categories, 
+    addCategory, 
+    removeCategory 
+  } = useInventory();
+
   const [newCat, setNewCat] = useState('');
+  const [categoriesModalVisible, setCategoriesModalVisible] = useState(false);
 
   const handleClearData = () => {
     Alert.alert(
-      "Êtes-vous sûr ?",
-      "Cette action est irréversible. Tout votre équipement et vos sacs seront effacés de ce téléphone.",
+      "Réinitialiser l'application ?",
+      "Cette action supprimera définitivement tout votre équipement, vos sacs et vos sorties enregistrés de ce téléphone.",
       [
         { text: "Annuler", style: "cancel" },
         { 
-          text: "Supprimer", 
+          text: "Réinitialiser", 
           style: "destructive", 
           onPress: async () => {
             await clearAllData();
-            Alert.alert("Succès", "Toutes les données ont été effacées.");
+            Alert.alert("Réinitialisé !", "Toutes vos données ont été remises à zéro avec succès.");
           } 
         }
       ]
@@ -29,113 +40,441 @@ export default function Profile() {
 
   const handleAddCategory = () => {
     if (newCat.trim()) {
-      addCategory(newCat);
+      if (categories.includes(newCat.trim())) {
+        Alert.alert("Erreur", "Cette catégorie existe déjà.");
+        return;
+      }
+      addCategory(newCat.trim());
       setNewCat('');
     }
   };
-
-  const renderThemeOption = (title: string, value: ThemeType, icon: string, isLast: boolean = false) => (
-    <Pressable style={[styles.cardRow, { backgroundColor: colors.card }, !isLast && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }]} onPress={() => setTheme(value)}>
-      <View style={styles.rowLeft}>
-        <View style={[styles.iconContainer, { backgroundColor: colors.background }]}>
-          <Ionicons name={icon as any} size={18} color={colors.text} />
-        </View>
-        <Text style={[styles.rowTitle, { color: colors.text }]}>{title}</Text>
-      </View>
-      {theme === value && <Ionicons name="checkmark" size={24} color={colors.primary} />}
-    </Pressable>
-  );
-
-  const renderWeightOption = (title: string, value: WeightUnit, isLast: boolean = false) => (
-    <Pressable style={[styles.cardRow, { backgroundColor: colors.card }, !isLast && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }]} onPress={() => setWeightUnit(value)}>
-      <Text style={[styles.rowTitle, { color: colors.text }]}>{title}</Text>
-      {weightUnit === value && <Ionicons name="checkmark" size={24} color={colors.primary} />}
-    </Pressable>
-  );
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <Text style={[styles.pageTitle, { color: colors.text }]}>Paramètres</Text>
 
-        <Text style={[styles.sectionTitle, { color: colors.subText }]}>THÈME</Text>
-        <View style={[styles.card, { backgroundColor: colors.card }]}>
-          {renderThemeOption('Automatique', 'automatic', 'contrast-outline')}
-          {renderThemeOption('Clair', 'light', 'sunny-outline')}
-          {renderThemeOption('Sombre', 'dark', 'moon-outline', true)}
-        </View>
-
-        <Text style={[styles.sectionTitle, { color: colors.subText }]}>UNITÉ DE POIDS</Text>
-        <View style={[styles.card, { backgroundColor: colors.card }]}>
-          {renderWeightOption('Kilogrammes (kg)', 'kg')}
-          {renderWeightOption('Grammes (g)', 'g', true)}
-        </View>
-
-        <Text style={[styles.sectionTitle, { color: colors.subText }]}>CATÉGORIES D'ÉQUIPEMENT</Text>
-        <View style={[styles.card, { backgroundColor: colors.card, paddingVertical: 8 }]}>
-          {categories.map((cat, idx) => (
-            <View key={cat} style={[styles.catRow, idx !== categories.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }]}>
-              <Text style={[styles.rowTitle, { color: colors.text }]}>{cat}</Text>
-              <Pressable onPress={() => removeCategory(cat)} style={styles.delBtn}>
-                <Ionicons name="close-circle" size={20} color={colors.danger} />
-              </Pressable>
+        {/* 1. COMPTE */}
+        <Text style={[styles.sectionTitle, { color: colors.subText }]}>Compte</Text>
+        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={[styles.accountRow, { borderBottomColor: colors.border }]}>
+            <View style={[styles.avatar, { backgroundColor: colors.primary + '20' }]}>
+              <Text style={[styles.avatarText, { color: colors.primary }]}>AK</Text>
             </View>
-          ))}
-          <View style={styles.addCatRow}>
-            <TextInput
-              style={[styles.addCatInput, { color: colors.text, borderColor: colors.border }]}
-              placeholder="Nouvelle catégorie..."
-              placeholderTextColor={colors.subText}
-              value={newCat}
-              onChangeText={setNewCat}
-              onSubmitEditing={handleAddCategory}
-            />
-            <Pressable style={[styles.addCatBtn, { backgroundColor: colors.primary }]} onPress={handleAddCategory}>
-              <Ionicons name="add" size={20} color="#FFFFFF" />
-            </Pressable>
+            <View style={styles.accountInfo}>
+              <Text style={[styles.accountName, { color: colors.text }]}>Amine KFI</Text>
+              <Text style={[styles.accountEmail, { color: colors.subText }]}>amine.kfi@example.com</Text>
+            </View>
           </View>
-        </View>
-
-        <Text style={[styles.sectionTitle, { color: colors.subText }]}>INFORMATIONS DE L'APPLICATION</Text>
-        <View style={[styles.card, { backgroundColor: colors.card }]}>
-          <View style={[styles.cardRow, { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }]}>
-            <Text style={[styles.rowTitle, { color: colors.text }]}>Version de l'application</Text>
-            <Text style={[styles.rowValue, { color: colors.subText }]}>{Constants.expoConfig?.version || '1.0.0'}</Text>
-          </View>
-          <View style={styles.cardRow}>
-            <Text style={[styles.rowTitle, { color: colors.text }]}>Moteur SDK</Text>
-            <Text style={[styles.rowValue, { color: colors.subText }]}>{Constants.expoConfig?.sdkVersion || '55'}</Text>
-          </View>
-        </View>
-
-        <Text style={[styles.sectionTitle, { color: colors.subText }]}>ZONE DE DANGER</Text>
-        <View style={[styles.card, { borderColor: colors.danger, borderWidth: StyleSheet.hairlineWidth, backgroundColor: colors.card }]}>
-          <Pressable style={styles.dangerBtn} onPress={handleClearData}>
-            <Text style={[styles.dangerBtnText, { color: colors.danger }]}>Supprimer toutes les données</Text>
+          <Pressable 
+            style={({ pressed }) => [
+              styles.cardRow, 
+              { opacity: pressed ? 0.7 : 1 }
+            ]}
+            onPress={() => Alert.alert("Modifier le profil", "Fonctionnalité en cours de développement (Version Bêta)")}
+          >
+            <View style={styles.rowLeft}>
+              <Ionicons name="person-outline" size={18} color={colors.primary} style={styles.rowIcon} />
+              <Text style={[styles.rowTitle, { color: colors.text }]}>Modifier les informations</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={colors.subText} />
           </Pressable>
         </View>
 
+        {/* 2. PARAMÈTRES GÉNÉRAUX */}
+        <Text style={[styles.sectionTitle, { color: colors.subText }]}>Paramètres Généraux</Text>
+        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          {/* Gestion du Thème */}
+          <View style={[styles.cardRow, { borderBottomWidth: 1, borderBottomColor: colors.border }]}>
+            <View style={styles.rowLeft}>
+              <Ionicons name="color-palette-outline" size={18} color={colors.primary} style={styles.rowIcon} />
+              <Text style={[styles.rowTitle, { color: colors.text }]}>Thème</Text>
+            </View>
+            <View style={[styles.segmentedContainer, { backgroundColor: colors.background }]}>
+              {(['automatic', 'light', 'dark'] as ThemeType[]).map((t) => {
+                const isActive = theme === t;
+                const label = t === 'automatic' ? 'Auto' : t === 'light' ? 'Clair' : 'Sombre';
+                return (
+                  <Pressable
+                    key={t}
+                    style={[
+                      styles.segmentChip,
+                      isActive && { backgroundColor: colors.primary }
+                    ]}
+                    onPress={() => setTheme(t)}
+                  >
+                    <Text style={[styles.segmentChipText, { color: isActive ? '#FFFFFF' : colors.text }]}>
+                      {label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+
+          {/* Gestion des Catégories */}
+          <Pressable 
+            style={({ pressed }) => [
+              styles.cardRow, 
+              { opacity: pressed ? 0.7 : 1 }
+            ]}
+            onPress={() => setCategoriesModalVisible(true)}
+          >
+            <View style={styles.rowLeft}>
+              <Ionicons name="list-outline" size={18} color={colors.primary} style={styles.rowIcon} />
+              <Text style={[styles.rowTitle, { color: colors.text }]}>Gestion des catégories</Text>
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Text style={{ fontSize: 13, color: colors.subText }}>{categories.length} catégories</Text>
+              <Ionicons name="chevron-forward" size={16} color={colors.subText} />
+            </View>
+          </Pressable>
+        </View>
+
+        {/* 3. PRÉFÉRENCES DE POIDS & UNITÉS */}
+        <Text style={[styles.sectionTitle, { color: colors.subText }]}>Préférences de Poids & Unités</Text>
+        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={styles.cardRow}>
+            <View style={styles.rowLeft}>
+              <Ionicons name="scale-outline" size={18} color={colors.primary} style={styles.rowIcon} />
+              <Text style={[styles.rowTitle, { color: colors.text }]}>Unité de mesure</Text>
+            </View>
+            <View style={[styles.segmentedContainer, { backgroundColor: colors.background }]}>
+              {(['kg', 'g'] as WeightUnit[]).map((u) => {
+                const isActive = weightUnit === u;
+                const label = u === 'kg' ? 'Kilogrammes' : 'Grammes';
+                return (
+                  <Pressable
+                    key={u}
+                    style={[
+                      styles.segmentChip,
+                      { paddingHorizontal: 12 },
+                      isActive && { backgroundColor: colors.primary }
+                    ]}
+                    onPress={() => setWeightUnit(u)}
+                  >
+                    <Text style={[styles.segmentChipText, { color: isActive ? '#FFFFFF' : colors.text }]}>
+                      {u}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+        </View>
+
+        {/* 4. MAINTENANCE */}
+        <Text style={[styles.sectionTitle, { color: colors.subText }]}>Maintenance</Text>
+        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Pressable 
+            style={({ pressed }) => [
+              styles.cardRow, 
+              { opacity: pressed ? 0.7 : 1 }
+            ]}
+            onPress={handleClearData}
+          >
+            <View style={styles.rowLeft}>
+              <Ionicons name="refresh-outline" size={18} color={colors.danger} style={styles.rowIcon} />
+              <Text style={[styles.rowTitle, { color: colors.text }]}>Réinitialiser l'application</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={colors.subText} />
+          </Pressable>
+        </View>
+
+        {/* 5. AIDE ET SUPPORT */}
+        <Text style={[styles.sectionTitle, { color: colors.subText }]}>Aide & Support</Text>
+        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          {/* Guide de Randonnée */}
+          <Pressable 
+            style={({ pressed }) => [
+              styles.cardRow, 
+              { borderBottomWidth: 1, borderBottomColor: colors.border, opacity: pressed ? 0.7 : 1 }
+            ]}
+            onPress={() => Alert.alert(
+              "Guide du parfait randonneur", 
+              "• Optimisation du sac : Classez votre matériel et maintenez un poids de base inférieur à 10 kg.\n\n• Sorties & Treks : Préparez vos aventures à l'avance et cochez vos équipements au moment du départ.\n\n• Consommables : Les objets comme la nourriture ou l'eau ne comptent pas dans votre poids de base."
+            )}
+          >
+            <View style={styles.rowLeft}>
+              <Ionicons name="book-outline" size={18} color={colors.primary} style={styles.rowIcon} />
+              <Text style={[styles.rowTitle, { color: colors.text }]}>Guide d'utilisation du parfait randonneur</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={colors.subText} />
+          </Pressable>
+
+          {/* Contact Support */}
+          <Pressable 
+            style={({ pressed }) => [
+              styles.cardRow, 
+              { opacity: pressed ? 0.7 : 1 }
+            ]}
+            onPress={() => Alert.alert(
+              "Contact & Support", 
+              "Une question, une suggestion ou un bug sur cette version bêta ?\n\nContactez-nous sur : support@trekapp.com"
+            )}
+          >
+            <View style={styles.rowLeft}>
+              <Ionicons name="mail-outline" size={18} color={colors.primary} style={styles.rowIcon} />
+              <Text style={[styles.rowTitle, { color: colors.text }]}>Contacter le support / Signaler un bug</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={colors.subText} />
+          </Pressable>
+        </View>
+
+        {/* 6. BOUTON SE DÉCONNECTER */}
+        <Pressable 
+          style={({ pressed }) => [
+            styles.logoutBtn, 
+            { 
+              backgroundColor: colors.card,
+              borderColor: colors.danger + '30',
+              opacity: pressed ? 0.8 : 1 
+            }
+          ]}
+          onPress={() => Alert.alert(
+            "Se déconnecter ?",
+            "Voulez-vous vous déconnecter de votre compte bêta ?",
+            [
+              { text: "Annuler", style: "cancel" },
+              { text: "Se déconnecter", style: "destructive", onPress: () => Alert.alert("Au revoir", "Déconnecté avec succès.") }
+            ]
+          )}
+        >
+          <Ionicons name="log-out-outline" size={20} color={colors.danger} />
+          <Text style={[styles.logoutText, { color: colors.danger }]}>Se déconnecter</Text>
+        </Pressable>
       </ScrollView>
+
+      {/* MODAL DE GESTION DES CATÉGORIES */}
+      <Modal 
+        visible={categoriesModalVisible} 
+        animationType="slide" 
+        presentationStyle="pageSheet" 
+        onRequestClose={() => setCategoriesModalVisible(false)}
+      >
+        <SafeAreaView style={[styles.modalContainer, { backgroundColor: colors.background }]} edges={['top']}>
+          <View style={[styles.modalHeader, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+            <Text style={[styles.modalHeaderTitle, { color: colors.text }]}>Catégories de matériel</Text>
+            <Pressable onPress={() => setCategoriesModalVisible(false)} style={styles.modalCloseBtn}>
+              <Text style={[styles.modalCloseText, { color: colors.primary }]}>Terminer</Text>
+            </Pressable>
+          </View>
+
+          <ScrollView contentContainerStyle={styles.modalScroll} showsVerticalScrollIndicator={false}>
+            <Text style={[styles.sectionTitle, { color: colors.subText, marginLeft: 4, marginBottom: 8 }]}>Liste des catégories</Text>
+            <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              {categories.map((cat, idx) => (
+                <View 
+                  key={cat} 
+                  style={[
+                    styles.catRow, 
+                    idx !== categories.length - 1 && { borderBottomWidth: 1, borderBottomColor: colors.border }
+                  ]}
+                >
+                  <Text style={[styles.rowTitle, { color: colors.text }]}>{cat}</Text>
+                  <Pressable onPress={() => removeCategory(cat)} style={styles.delBtn}>
+                    <Ionicons name="trash-outline" size={16} color={colors.danger} />
+                  </Pressable>
+                </View>
+              ))}
+            </View>
+
+            <Text style={[styles.sectionTitle, { color: colors.subText, marginLeft: 4, marginBottom: 8, marginTop: 24 }]}>Ajouter une catégorie</Text>
+            <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, padding: 12 }]}>
+              <View style={styles.addCatRow}>
+                <TextInput
+                  style={[styles.addCatInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]}
+                  placeholder="Ex: Éclairage, Cartographie..."
+                  placeholderTextColor={colors.subText}
+                  value={newCat}
+                  onChangeText={setNewCat}
+                  onSubmitEditing={handleAddCategory}
+                />
+                <Pressable style={[styles.addCatBtn, { backgroundColor: colors.primary }]} onPress={handleAddCategory}>
+                  <Ionicons name="add" size={22} color="#FFFFFF" />
+                </Pressable>
+              </View>
+            </View>
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  content: { padding: 20, paddingBottom: 40 },
-  pageTitle: { fontSize: 34, fontWeight: '800', marginBottom: 24 },
-  sectionTitle: { fontSize: 13, fontWeight: '600', marginLeft: 16, marginBottom: 8, marginTop: 24 },
-  card: { borderRadius: 12, overflow: 'hidden' },
-  cardRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 14, paddingHorizontal: 16 },
-  rowLeft: { flexDirection: 'row', alignItems: 'center' },
-  iconContainer: { width: 30, height: 30, borderRadius: 8, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
-  rowTitle: { fontSize: 16 },
-  rowValue: { fontSize: 16 },
-  dangerBtn: { paddingVertical: 14, paddingHorizontal: 16, alignItems: 'center' },
-  dangerBtnText: { fontSize: 16, fontWeight: '500' },
-  catRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12, paddingHorizontal: 16 },
-  delBtn: { padding: 4 },
-  addCatRow: { flexDirection: 'row', alignItems: 'center', padding: 12, paddingTop: 16 },
-  addCatInput: { flex: 1, height: 40, borderWidth: 1, borderRadius: 8, paddingHorizontal: 12, marginRight: 8, fontSize: 15 },
-  addCatBtn: { width: 40, height: 40, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
+  container: {
+    flex: 1,
+  },
+  content: {
+    padding: 20,
+    paddingBottom: 40,
+  },
+  pageTitle: {
+    fontSize: 28,
+    fontWeight: '800',
+    marginBottom: 10,
+  },
+  sectionTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 1.5,
+    marginBottom: 8,
+    marginTop: 22,
+    textTransform: 'uppercase',
+    marginLeft: 4,
+  },
+  card: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    borderWidth: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  accountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+  },
+  avatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarText: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  accountInfo: {
+    flex: 1,
+    marginLeft: 14,
+  },
+  accountName: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  accountEmail: {
+    fontSize: 13,
+    marginTop: 2,
+  },
+  cardRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+  },
+  rowLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  rowIcon: {
+    width: 24,
+    textAlign: 'center',
+  },
+  rowTitle: {
+    fontSize: 14,
+    fontWeight: '500',
+    flex: 1,
+  },
+  segmentedContainer: {
+    flexDirection: 'row',
+    borderRadius: 10,
+    padding: 3,
+    gap: 4,
+  },
+  segmentChip: {
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  segmentChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  logoutBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    marginTop: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  logoutText: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  modalContainer: {
+    flex: 1,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    borderBottomWidth: 1,
+  },
+  modalHeaderTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  modalCloseBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+  },
+  modalCloseText: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  modalScroll: {
+    padding: 20,
+    paddingBottom: 40,
+  },
+  catRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+  },
+  delBtn: {
+    padding: 6,
+  },
+  addCatRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  addCatInput: {
+    flex: 1,
+    height: 44,
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    fontSize: 14,
+  },
+  addCatBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
 });

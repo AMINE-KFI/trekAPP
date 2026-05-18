@@ -55,18 +55,56 @@ export default function AddItem() {
   const [isBrowserOpen, setIsBrowserOpen] = useState(false);
   const webViewRef = useRef<WebView>(null);
   const [showSuccessMsg, setShowSuccessMsg] = useState(false);
+  const [isDropdownVisible, setIsDropdownVisible] = useState(false);
 
   const pickImage = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [4, 3],
-      quality: 0.8,
-    });
-
-    if (!result.canceled) {
-      setImageUri(result.assets[0].uri);
-    }
+    Alert.alert(
+      "Ajouter une photo",
+      "Choisissez le mode de capture :",
+      [
+        {
+          text: "Prendre une photo",
+          onPress: async () => {
+            const { status } = await ImagePicker.requestCameraPermissionsAsync();
+            if (status !== 'granted') {
+              Alert.alert("Permission requise", "Nous avons besoin de l'accès à l'appareil photo pour prendre une photo.");
+              return;
+            }
+            const result = await ImagePicker.launchCameraAsync({
+              allowsEditing: true,
+              aspect: [4, 3],
+              quality: 0.8,
+            });
+            if (!result.canceled) {
+              setImageUri(result.assets[0].uri);
+            }
+          }
+        },
+        {
+          text: "Choisir depuis la galerie",
+          onPress: async () => {
+            const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (status !== 'granted') {
+              Alert.alert("Permission requise", "Nous avons besoin de l'accès à la galerie pour choisir une photo.");
+              return;
+            }
+            const result = await ImagePicker.launchImageLibraryAsync({
+              mediaTypes: ImagePicker.MediaTypeOptions.Images,
+              allowsEditing: true,
+              aspect: [4, 3],
+              quality: 0.8,
+            });
+            if (!result.canceled) {
+              setImageUri(result.assets[0].uri);
+            }
+          }
+        },
+        {
+          text: "Annuler",
+          style: "cancel"
+        }
+      ]
+    );
   };
 
   useEffect(() => {
@@ -244,21 +282,16 @@ export default function AddItem() {
 
         <View style={styles.formGroup}>
           <Text style={[styles.label, { color: colors.text }]}>Catégorie</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryContainer}>
-            {categories.map((catName) => {
-              const iconName = getCategoryIcon(catName);
-              return (
-                <Pressable 
-                  key={catName} 
-                  style={[styles.categoryBtn, { backgroundColor: colors.card, borderColor: colors.border }, category === catName && { backgroundColor: colors.primary, borderColor: colors.primary }]}
-                  onPress={() => setCategory(catName)}
-                >
-                  <Ionicons name={iconName as any} size={20} color={category === catName ? '#FFFFFF' : colors.subText} />
-                  <Text style={[styles.categoryText, { color: category === catName ? '#FFFFFF' : colors.text }]}>{catName}</Text>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
+          <Pressable 
+            style={[styles.dropdownSelector, { backgroundColor: colors.card, borderColor: colors.border }]} 
+            onPress={() => setIsDropdownVisible(true)}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <Ionicons name={getCategoryIcon(category) as any} size={20} color={colors.primary} />
+              <Text style={{ color: colors.text, fontSize: 16 }}>{category}</Text>
+            </View>
+            <Ionicons name="chevron-down" size={20} color={colors.subText} />
+          </Pressable>
         </View>
 
         <View style={[styles.switchGroup, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -356,6 +389,47 @@ export default function AddItem() {
             )}
           />
         </SafeAreaView>
+      </Modal>
+
+      {/* Modal Dropdown pour la Catégorie (Style Antigravyty) */}
+      <Modal visible={isDropdownVisible} transparent animationType="fade" onRequestClose={() => setIsDropdownVisible(false)}>
+        <Pressable style={styles.dropdownModalOverlay} onPress={() => setIsDropdownVisible(false)}>
+          <Pressable style={[styles.dropdownModalContent, { backgroundColor: colors.card }]} onPress={(e) => e.stopPropagation()}>
+            <Text style={[styles.dropdownModalTitle, { color: colors.text }]}>Sélectionner une catégorie</Text>
+            <ScrollView style={{ marginVertical: 12 }} showsVerticalScrollIndicator={false}>
+              {categories.map((catName) => {
+                const iconName = getCategoryIcon(catName);
+                const isSelected = category === catName;
+                return (
+                  <Pressable
+                    key={catName}
+                    style={({ pressed }) => [
+                      styles.dropdownFilterItem,
+                      {
+                        backgroundColor: isSelected ? colors.primary + '15' : colors.background,
+                        borderColor: isSelected ? colors.primary : colors.border,
+                        opacity: pressed ? 0.7 : 1
+                      }
+                    ]}
+                    onPress={() => {
+                      setCategory(catName);
+                      setIsDropdownVisible(false);
+                    }}
+                  >
+                    <Ionicons name={iconName as any} size={20} color={isSelected ? colors.primary : colors.subText} />
+                    <Text style={[styles.dropdownFilterItemText, { color: colors.text, fontWeight: isSelected ? '700' : '500' }]}>
+                      {catName}
+                    </Text>
+                    {isSelected && <Ionicons name="checkmark" size={18} color={colors.primary} />}
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+            <Pressable style={[styles.dropdownModalCancelBtn, { backgroundColor: colors.border }]} onPress={() => setIsDropdownVisible(false)}>
+              <Text style={[styles.dropdownModalCancelText, { color: colors.text, textAlign: 'center' }]}>Fermer</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
       </Modal>
     </SafeAreaView>
   );
@@ -495,33 +569,58 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
   },
-  categoryContainer: {
-    gap: 8,
-    paddingVertical: 4,
-  },
-  categoryBtn: {
+  dropdownSelector: {
+    height: 56,
+    borderRadius: 12,
+    paddingHorizontal: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
+    justifyContent: 'space-between',
     borderWidth: 1,
-    borderColor: '#EAEAEA',
-    marginRight: 8,
   },
-  categoryBtnActive: {
-    backgroundColor: '#34A853',
-    borderColor: '#34A853',
+  dropdownModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
   },
-  categoryText: {
-    marginLeft: 8,
+  dropdownModalContent: {
+    width: '90%',
+    maxHeight: '60%',
+    borderRadius: 24,
+    padding: 24,
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+  },
+  dropdownModalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 16,
+  },
+  dropdownModalCancelBtn: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+  },
+  dropdownModalCancelText: {
+    fontWeight: '600',
+  },
+  dropdownFilterItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 8,
+    gap: 12,
+  },
+  dropdownFilterItemText: {
     fontSize: 14,
-    color: '#666666',
-    fontWeight: '500',
-  },
-  categoryTextActive: {
-    color: '#FFFFFF',
+    flex: 1,
   },
   switchGroup: {
     flexDirection: 'row',
