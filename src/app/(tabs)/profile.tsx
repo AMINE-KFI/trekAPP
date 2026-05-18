@@ -1,19 +1,19 @@
-import { View, Text, StyleSheet, Pressable, ScrollView, Alert, TextInput, Modal, Platform } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
-import { useInventory, ThemeType, WeightUnit } from '../../context/InventoryContext';
+import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { ThemeType, useInventory, WeightUnit } from '../../context/InventoryContext';
 
 export default function Profile() {
-  const { 
-    clearAllData, 
-    theme, 
-    setTheme, 
-    colors, 
-    weightUnit, 
-    setWeightUnit, 
-    categories, 
-    addCategory, 
+  const {
+    clearAllData,
+    theme,
+    setTheme,
+    colors,
+    weightUnit,
+    setWeightUnit,
+    categories,
+    addCategory,
     removeCategory,
     moveCategory
   } = useInventory();
@@ -27,13 +27,13 @@ export default function Profile() {
       "Cette action supprimera définitivement tout votre équipement, vos sacs et vos sorties enregistrés de ce téléphone.",
       [
         { text: "Annuler", style: "cancel" },
-        { 
-          text: "Réinitialiser", 
-          style: "destructive", 
+        {
+          text: "Réinitialiser",
+          style: "destructive",
           onPress: async () => {
             await clearAllData();
             Alert.alert("Réinitialisé !", "Toutes vos données ont été remises à zéro avec succès.");
-          } 
+          }
         }
       ]
     );
@@ -67,9 +67,9 @@ export default function Profile() {
               <Text style={[styles.accountEmail, { color: colors.subText }]}>amine.kfi@example.com</Text>
             </View>
           </View>
-          <Pressable 
+          <Pressable
             style={({ pressed }) => [
-              styles.cardRow, 
+              styles.cardRow,
               { opacity: pressed ? 0.7 : 1 }
             ]}
             onPress={() => Alert.alert("Modifier le profil", "Fonctionnalité en cours de développement (Version Bêta)")}
@@ -114,9 +114,9 @@ export default function Profile() {
           </View>
 
           {/* Gestion des Catégories */}
-          <Pressable 
+          <Pressable
             style={({ pressed }) => [
-              styles.cardRow, 
+              styles.cardRow,
               { opacity: pressed ? 0.7 : 1 }
             ]}
             onPress={() => setCategoriesModalVisible(true)}
@@ -167,9 +167,9 @@ export default function Profile() {
         {/* 4. MAINTENANCE */}
         <Text style={[styles.sectionTitle, { color: colors.subText }]}>Maintenance</Text>
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Pressable 
+          <Pressable
             style={({ pressed }) => [
-              styles.cardRow, 
+              styles.cardRow,
               { opacity: pressed ? 0.7 : 1 }
             ]}
             onPress={handleClearData}
@@ -186,13 +186,13 @@ export default function Profile() {
         <Text style={[styles.sectionTitle, { color: colors.subText }]}>Aide & Support</Text>
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
           {/* Guide de Randonnée */}
-          <Pressable 
+          <Pressable
             style={({ pressed }) => [
-              styles.cardRow, 
+              styles.cardRow,
               { borderBottomWidth: 1, borderBottomColor: colors.border, opacity: pressed ? 0.7 : 1 }
             ]}
             onPress={() => Alert.alert(
-              "Guide du parfait randonneur", 
+              "Guide du parfait randonneur",
               "• Optimisation du sac : Classez votre matériel et maintenez un poids de base inférieur à 10 kg.\n\n• Sorties & Treks : Préparez vos aventures à l'avance et cochez vos équipements au moment du départ.\n\n• Consommables : Les objets comme la nourriture ou l'eau ne comptent pas dans votre poids de base."
             )}
           >
@@ -204,13 +204,13 @@ export default function Profile() {
           </Pressable>
 
           {/* Contact Support */}
-          <Pressable 
+          <Pressable
             style={({ pressed }) => [
-              styles.cardRow, 
+              styles.cardRow,
               { opacity: pressed ? 0.7 : 1 }
             ]}
             onPress={() => Alert.alert(
-              "Contact & Support", 
+              "Contact & Support",
               "Une question, une suggestion ou un bug sur cette version bêta ?\n\nContactez-nous sur : support@trekapp.com"
             )}
           >
@@ -223,13 +223,13 @@ export default function Profile() {
         </View>
 
         {/* 6. BOUTON SE DÉCONNECTER */}
-        <Pressable 
+        <Pressable
           style={({ pressed }) => [
-            styles.logoutBtn, 
-            { 
+            styles.logoutBtn,
+            {
               backgroundColor: colors.card,
               borderColor: colors.danger + '30',
-              opacity: pressed ? 0.8 : 1 
+              opacity: pressed ? 0.8 : 1
             }
           ]}
           onPress={() => Alert.alert(
@@ -247,10 +247,10 @@ export default function Profile() {
       </ScrollView>
 
       {/* MODAL DE GESTION DES CATÉGORIES */}
-      <Modal 
-        visible={categoriesModalVisible} 
-        animationType="slide" 
-        presentationStyle="pageSheet" 
+      <Modal
+        visible={categoriesModalVisible}
+        animationType="slide"
+        presentationStyle="pageSheet"
         onRequestClose={() => setCategoriesModalVisible(false)}
       >
         <SafeAreaView style={[styles.modalContainer, { backgroundColor: colors.background }]} edges={['top']}>
@@ -265,10 +265,10 @@ export default function Profile() {
             <Text style={[styles.sectionTitle, { color: colors.subText, marginLeft: 4, marginBottom: 8 }]}>Liste des catégories</Text>
             <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
               {categories.map((cat, idx) => (
-                <View 
-                  key={cat} 
+                <View
+                  key={cat}
                   style={[
-                    styles.catRow, 
+                    styles.catRow,
                     idx !== categories.length - 1 && { borderBottomWidth: 1, borderBottomColor: colors.border }
                   ]}
                 >

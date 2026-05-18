@@ -1,89 +1,145 @@
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import React from 'react';
+import { View, Text, StyleSheet, Pressable, ImageBackground, StatusBar } from 'react-native';
 import { useRouter } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useInventory } from '../context/InventoryContext';
+import { Ionicons } from '@expo/vector-icons';
 
 export default function Onboarding() {
   const router = useRouter();
   const { colors } = useInventory();
+  const insets = useSafeAreaInsets();
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={styles.imageContainer}>
-        <View style={[styles.placeholderImage, { backgroundColor: colors.card }]}>
-          <Text style={[styles.placeholderText, { color: colors.accent }]}>[Image Nature/Montagne]</Text>
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+      <ImageBackground
+        source={require('../../assets/images/hiking.webp')}
+        style={styles.backgroundImage}
+        resizeMode="cover"
+      >
+        {/* Filtre sombre léger de 25% pour préserver la lisibilité de manière premium */}
+        <View style={styles.overlay} />
+
+        <View style={[styles.contentContainer, { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 20 }]}>
+          {/* Logo / Nom de l'app en haut */}
+          <View style={styles.header}>
+            <Ionicons name="leaf-outline" size={24} color="#FFFFFF" />
+            <Text style={styles.brandText}>TrekAPP</Text>
+          </View>
+
+          {/* Spacer au milieu pour faire descendre les textes et voir les randonneurs */}
+          <View style={styles.spacer} />
+
+          {/* Textes et bouton en bas */}
+          <View style={styles.footer}>
+            <Text style={styles.title}>Votre assistant de trek propulsé par l'IA</Text>
+            <Text style={styles.subtitle}>
+              Optimisez votre sac, suivez votre inventaire et partez léger. L'aventure n'attend plus que vous.
+            </Text>
+
+            <Pressable
+              style={({ pressed }) => [
+                styles.button,
+                { backgroundColor: colors.primary, shadowColor: colors.primary },
+                pressed && styles.buttonPressed
+              ]}
+              onPress={() => router.push('/(auth)/login')}
+            >
+              <Text style={styles.buttonText}>Commencer</Text>
+              <Ionicons name="arrow-forward" size={18} color="#FFFFFF" style={{ marginLeft: 6 }} />
+            </Pressable>
+          </View>
         </View>
-      </View>
-      <View style={styles.content}>
-        <Text style={[styles.title, { color: colors.text }]}>Votre assistant de trek propulsé par l'IA</Text>
-        <Text style={[styles.subtitle, { color: colors.subText }]}>
-          Optimisez votre sac, suivez votre inventaire et partez léger. L'aventure n'attend plus que vous.
-        </Text>
-        <Pressable style={[styles.button, { backgroundColor: colors.primary, shadowColor: colors.primary }]} onPress={() => router.push('/(auth)/login')}>
-          <Text style={styles.buttonText}>Commencer</Text>
-        </Pressable>
-      </View>
-    </SafeAreaView>
+      </ImageBackground>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
   },
-  imageContainer: {
-    flex: 1.5,
-    padding: 16,
-  },
-  placeholderImage: {
+  backgroundImage: {
     flex: 1,
-    backgroundColor: '#F5F5F5',
-    borderRadius: 32,
-    justifyContent: 'center',
-    alignItems: 'center',
+    width: '100%',
+    height: '100%',
   },
-  placeholderText: {
-    color: '#1D6DBF',
-    fontWeight: '600',
-    fontSize: 16,
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.25)', // Filtre sombre de 25%
   },
-  content: {
+  contentContainer: {
     flex: 1,
-    padding: 32,
+    justifyContent: 'space-between',
+    paddingHorizontal: 28,
+  },
+  header: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 8,
+    alignSelf: 'center',
   },
-  title: {
-    fontSize: 32,
-    fontWeight: '700',
-    color: '#333333',
-    textAlign: 'center',
-    marginBottom: 16,
+  brandText: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    letterSpacing: 2,
+    textTransform: 'uppercase',
+    textShadowColor: 'rgba(0,0,0,0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
   },
-  subtitle: {
-    fontSize: 16,
-    color: '#666666',
-    textAlign: 'center',
-    lineHeight: 24,
-    marginBottom: 40,
+  spacer: {
+    flex: 1,
   },
-  button: {
-    backgroundColor: '#34A853',
-    paddingVertical: 18,
-    paddingHorizontal: 48,
-    borderRadius: 30,
+  footer: {
     width: '100%',
     alignItems: 'center',
-    shadowColor: '#34A853',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
+    marginBottom: 16,
+  },
+  title: {
+    fontSize: 30,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    marginBottom: 14,
+    lineHeight: 38,
+    textShadowColor: 'rgba(0,0,0,0.4)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 6,
+  },
+  subtitle: {
+    fontSize: 15,
+    color: 'rgba(255, 255, 255, 0.85)',
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 36,
+    textShadowColor: 'rgba(0,0,0,0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
+  },
+  button: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 32,
+    borderRadius: 30,
+    width: '100%',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    elevation: 5,
+  },
+  buttonPressed: {
+    transform: [{ scale: 0.98 }],
+    opacity: 0.9,
   },
   buttonText: {
     color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
 });
