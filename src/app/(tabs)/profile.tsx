@@ -14,7 +14,8 @@ export default function Profile() {
     setWeightUnit, 
     categories, 
     addCategory, 
-    removeCategory 
+    removeCategory,
+    moveCategory
   } = useInventory();
 
   const [newCat, setNewCat] = useState('');
@@ -271,10 +272,26 @@ export default function Profile() {
                     idx !== categories.length - 1 && { borderBottomWidth: 1, borderBottomColor: colors.border }
                   ]}
                 >
-                  <Text style={[styles.rowTitle, { color: colors.text }]}>{cat}</Text>
-                  <Pressable onPress={() => removeCategory(cat)} style={styles.delBtn}>
-                    <Ionicons name="trash-outline" size={16} color={colors.danger} />
-                  </Pressable>
+                  <Text style={[styles.rowTitle, { color: colors.text, flex: 1 }]}>{cat}</Text>
+                  <View style={styles.catActions}>
+                    {idx > 0 ? (
+                      <Pressable onPress={() => moveCategory(idx, 'up')} style={styles.arrowBtn}>
+                        <Ionicons name="arrow-up-outline" size={18} color="#888888" />
+                      </Pressable>
+                    ) : (
+                      <View style={{ width: 30 }} />
+                    )}
+                    {idx < categories.length - 1 ? (
+                      <Pressable onPress={() => moveCategory(idx, 'down')} style={styles.arrowBtn}>
+                        <Ionicons name="arrow-down-outline" size={18} color="#888888" />
+                      </Pressable>
+                    ) : (
+                      <View style={{ width: 30 }} />
+                    )}
+                    <Pressable onPress={() => removeCategory(cat)} style={styles.delBtn}>
+                      <Ionicons name="trash-outline" size={16} color={colors.danger} />
+                    </Pressable>
+                  </View>
                 </View>
               ))}
             </View>
@@ -456,6 +473,17 @@ const styles = StyleSheet.create({
   },
   delBtn: {
     padding: 6,
+  },
+  catActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  arrowBtn: {
+    padding: 6,
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 30,
   },
   addCatRow: {
     flexDirection: 'row',

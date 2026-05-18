@@ -46,7 +46,7 @@ export const CATEGORIES_META: Record<string, { icon: string, color: string }> = 
   "Électronique": { icon: "battery-charging", color: "#e74c3c" },
   "Hygiène": { icon: "water", color: "#00bcd4" },
   "Consommable": { icon: "fast-food", color: "#f1c40f" },
-  "Autre": { icon: "cube", color: "#999999" }
+  "Neutre": { icon: "cube", color: "#999999" }
 };
 
 export interface InventoryItem {
@@ -97,6 +97,7 @@ interface InventoryContextType {
   categories: string[];
   addCategory: (cat: string) => void;
   removeCategory: (cat: string) => void;
+  moveCategory: (index: number, direction: 'up' | 'down') => void;
   addItem: (item: InventoryItem) => void;
   addPack: (name: string) => void;
   deletePack: (id: string) => void;
@@ -127,6 +128,7 @@ const InventoryContext = createContext<InventoryContextType>({
   categories: [],
   addCategory: () => {},
   removeCategory: () => {},
+  moveCategory: () => {},
   addItem: () => {},
   addPack: () => {},
   deletePack: () => {},
@@ -149,12 +151,12 @@ export const useInventory = () => useContext(InventoryContext);
 
 const DEFAULT_ITEMS: InventoryItem[] = [
   { id: '1', name: 'Tente MSR Hubba', weight: '1.3 kg', category: 'Abri', isConsumable: false, brand: 'MSR', techInfo: 'Tente 2 places, 3 saisons' },
-  { id: '2', name: 'Sac Osprey Exos', weight: '1.2 kg', category: 'Autre', isConsumable: false, brand: 'Osprey', techInfo: 'Volume 58L' },
+  { id: '2', name: 'Sac Osprey Exos', weight: '1.2 kg', category: 'Neutre', isConsumable: false, brand: 'Osprey', techInfo: 'Volume 58L' },
   { id: '3', name: 'Veste Gore-Tex', weight: '0.4 kg', category: 'Vêtement', isConsumable: false, brand: 'Arc\'teryx', techInfo: 'Imperméabilité 28000mm' },
   { id: '4', name: 'Lyophilisé Pâtes', weight: '0.12 kg', category: 'Consommable', isConsumable: true, brand: 'Trek\'n Eat' },
 ];
 
-const DEFAULT_CATEGORIES = ["Abri", "Sommeil", "Cuisine", "Vêtement", "Hygiène", "Consommable", "Autre"];
+const DEFAULT_CATEGORIES = ["Abri", "Sommeil", "Cuisine", "Vêtement", "Hygiène", "Consommable", "Neutre"];
 
 export const InventoryProvider = ({ children }: { children: React.ReactNode }) => {
   const [items, setItems] = useState<InventoryItem[]>([]);
@@ -236,6 +238,22 @@ export const InventoryProvider = ({ children }: { children: React.ReactNode }) =
 
   const removeCategory = (cat: string) => {
     setCategoriesState(prev => prev.filter(c => c !== cat));
+  };
+
+  const moveCategory = (index: number, direction: 'up' | 'down') => {
+    if (index < 0 || index >= categories.length) return;
+    const nextCategories = [...categories];
+    if (direction === 'up' && index > 0) {
+      const temp = nextCategories[index];
+      nextCategories[index] = nextCategories[index - 1];
+      nextCategories[index - 1] = temp;
+      setCategoriesState(nextCategories);
+    } else if (direction === 'down' && index < categories.length - 1) {
+      const temp = nextCategories[index];
+      nextCategories[index] = nextCategories[index + 1];
+      nextCategories[index + 1] = temp;
+      setCategoriesState(nextCategories);
+    }
   };
 
   const addItem = (item: InventoryItem) => setItems(prev => [item, ...prev]);
@@ -341,7 +359,7 @@ export const InventoryProvider = ({ children }: { children: React.ReactNode }) =
 
   return (
     <InventoryContext.Provider value={{
-      items, packs, theme, setTheme, colors, weightUnit, setWeightUnit, formatDisplayWeight, categories, addCategory, removeCategory,
+      items, packs, theme, setTheme, colors, weightUnit, setWeightUnit, formatDisplayWeight, categories, addCategory, removeCategory, moveCategory,
       addItem, addPack, deletePack, updateItemQuantityInPack, updatePackName, updateTrekName, deleteItem, updateItem, clearAllData,
       treks, addTrek, deleteTrek, toggleChecklistItem, addChecklistItem, removeChecklistItem, updateTrekPack
     }}>

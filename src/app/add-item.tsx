@@ -49,7 +49,7 @@ export default function AddItem() {
   const [weight, setWeight] = useState('');
   const [techInfo, setTechInfo] = useState('');
   const [imageUri, setImageUri] = useState<string | null>(null);
-  const [category, setCategory] = useState('Autre');
+  const [category, setCategory] = useState('Neutre');
   const [isConsumable, setIsConsumable] = useState(false);
 
   const [isBrowserOpen, setIsBrowserOpen] = useState(false);
