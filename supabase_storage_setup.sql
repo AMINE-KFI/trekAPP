@@ -28,10 +28,10 @@ WITH CHECK ( bucket_id = 'equipments' );
 CREATE POLICY "Authenticated Update"
 ON storage.objects FOR UPDATE
 TO authenticated
-USING ( bucket_id = 'equipments' AND auth.uid()::text = owner );
+USING ( bucket_id = 'equipments' AND auth.uid()::text = owner::text );
 
 -- 6. RLS Policy : Permettre aux utilisateurs connectés de supprimer leurs propres photos
 CREATE POLICY "Authenticated Delete"
 ON storage.objects FOR DELETE
 TO authenticated
-USING ( bucket_id = 'equipments' AND auth.uid()::text = owner );
+USING ( bucket_id = 'equipments' AND auth.uid()::text = owner::text );
