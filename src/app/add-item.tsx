@@ -3,6 +3,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useState, useRef, useEffect } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View, ActivityIndicator, Alert, Modal, KeyboardAvoidingView, Platform } from 'react-native';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import { useInventory, CATEGORIES_META } from '../context/InventoryContext';
@@ -57,6 +58,11 @@ export default function AddItem() {
   const [showSuccessMsg, setShowSuccessMsg] = useState(false);
   const [isDropdownVisible, setIsDropdownVisible] = useState(false);
 
+  const [permission, requestPermission] = useCameraPermissions();
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [scanned, setScanned] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('matériel randonnée');
+
   const pickImage = async () => {
     Alert.alert(
       "Ajouter une photo",
@@ -105,6 +111,25 @@ export default function AddItem() {
         }
       ]
     );
+  };
+
+  const handleOpenScanner = async () => {
+    if (!permission) return;
+    if (!permission.granted) {
+      const res = await requestPermission();
+      if (!res.granted) {
+        // Will be managed inside the modal content UI
+      }
+    }
+    setScanned(false);
+    setIsScannerOpen(true);
+  };
+
+  const handleBarcodeScanned = ({ data }: { data: string }) => {
+    setScanned(true);
+    setSearchQuery(data);
+    setIsScannerOpen(false);
+    setIsBrowserOpen(true);
   };
 
   useEffect(() => {
@@ -252,12 +277,28 @@ export default function AddItem() {
         style={{ flex: 1 }}
       >
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        {/* Recherche via In-App Browser */}
+        {/* Recherche via In-App Browser & Scanner */}
         <View style={styles.searchSection}>
-          <Pressable style={[styles.browserBtn, { backgroundColor: colors.primary, shadowColor: colors.primary }]} onPress={() => setIsBrowserOpen(true)}>
-            <Ionicons name="search" size={24} color="#FFFFFF" />
-            <Text style={styles.browserBtnText}>Rechercher un produit sur le Web</Text>
-          </Pressable>
+          <View style={{ gap: 10 }}>
+            <Pressable 
+              style={[styles.browserBtn, { backgroundColor: colors.accent, shadowColor: colors.accent }]} 
+              onPress={() => {
+                setSearchQuery('matériel randonnée');
+                setIsBrowserOpen(true);
+              }}
+            >
+              <Ionicons name="search" size={20} color="#FFFFFF" />
+              <Text style={styles.browserBtnText}>Rechercher un produit sur le Web</Text>
+            </Pressable>
+
+            <Pressable 
+              style={[styles.browserBtn, { backgroundColor: colors.primary, shadowColor: colors.primary }]} 
+              onPress={handleOpenScanner}
+            >
+              <Ionicons name="barcode-outline" size={20} color="#FFFFFF" />
+              <Text style={styles.browserBtnText}>Scanner un code-barres</Text>
+            </Pressable>
+          </View>
 
           {showSuccessMsg && (
             <View style={styles.successMessage}>
@@ -378,7 +419,7 @@ export default function AddItem() {
           </View>
           <WebView
             ref={webViewRef}
-            source={{ uri: 'https://www.google.com/search?tbm=shop&q=matériel+randonnée' }}
+            source={{ uri: `https://www.google.com/search?tbm=shop&q=${encodeURIComponent(searchQuery)}` }}
             onMessage={handleWebViewMessage}
             style={styles.webview}
             startInLoadingState
@@ -389,6 +430,48 @@ export default function AddItem() {
             )}
           />
         </SafeAreaView>
+      </Modal>
+
+      {/* Scanner Modal pour les Codes-barres */}
+      <Modal 
+        visible={isScannerOpen} 
+        animationType="slide" 
+        onRequestClose={() => setIsScannerOpen(false)}
+      >
+        {permission && !permission.granted ? (
+          <SafeAreaView style={[styles.scannerModalContainer, { backgroundColor: '#121212' }]}>
+            <View style={styles.permissionContainer}>
+              <Ionicons name="camera-outline" size={64} color={colors.primary} style={{ marginBottom: 20 }} />
+              <Text style={styles.permissionTitle}>Accès à l'appareil photo requis</Text>
+              <Text style={styles.permissionDesc}>
+                Nous avons besoin de votre autorisation pour utiliser l'appareil photo afin de scanner le code-barres de vos équipements.
+              </Text>
+              <Pressable style={[styles.permissionBtn, { backgroundColor: colors.primary }]} onPress={requestPermission}>
+                <Text style={styles.permissionBtnText}>Autoriser la caméra</Text>
+              </Pressable>
+            </View>
+            <Pressable style={styles.scannerCloseBtn} onPress={() => setIsScannerOpen(false)}>
+              <Ionicons name="close" size={24} color="#FFFFFF" />
+            </Pressable>
+          </SafeAreaView>
+        ) : (
+          <View style={[styles.scannerModalContainer, { backgroundColor: '#000000', flex: 1 }]}>
+            <CameraView
+              style={StyleSheet.absoluteFillObject}
+              barcodeScannerSettings={{
+                barcodeTypes: ['qr', 'ean13', 'ean8', 'code128', 'code39', 'upc_a', 'upc_e'],
+              }}
+              onBarcodeScanned={scanned ? undefined : handleBarcodeScanned}
+            />
+            <View style={styles.scannerOverlay}>
+              <View style={styles.scanTargetFrame} />
+              <Text style={styles.scanTargetText}>Placez le code-barres dans le cadre</Text>
+            </View>
+            <Pressable style={styles.scannerCloseBtn} onPress={() => setIsScannerOpen(false)}>
+              <Ionicons name="close" size={24} color="#FFFFFF" />
+            </Pressable>
+          </View>
+        )}
       </Modal>
 
       {/* Modal Dropdown pour la Catégorie (Style Antigravyty) */}
@@ -691,5 +774,77 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: 'rgba(255,255,255,0.8)',
+  },
+  // Camera Scanner Modal Styles
+  scannerModalContainer: {
+    flex: 1,
+  },
+  scannerOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  scanTargetFrame: {
+    width: 280,
+    height: 180,
+    borderWidth: 2,
+    borderColor: '#34A853',
+    borderRadius: 16,
+    backgroundColor: 'transparent',
+  },
+  scanTargetText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '600',
+    marginTop: 24,
+    textAlign: 'center',
+    textShadowColor: 'rgba(0, 0, 0, 0.75)',
+    textShadowOffset: { width: -1, height: 1 },
+    textShadowRadius: 10,
+  },
+  scannerCloseBtn: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 50 : 30,
+    right: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  permissionContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 32,
+  },
+  permissionTitle: {
+    color: '#FFFFFF',
+    fontSize: 20,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  permissionDesc: {
+    color: '#A0A0A5',
+    fontSize: 14,
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 32,
+  },
+  permissionBtn: {
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    width: '100%',
+  },
+  permissionBtnText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
