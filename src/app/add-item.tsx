@@ -261,7 +261,7 @@ export default function AddItem() {
 
       if (error) {
         console.error("Storage upload error:", error);
-        Alert.alert("Erreur lors de l'envoi de l'image", "Impossible d'enregistrer l'image sur le serveur.");
+        Alert.alert("Erreur lors de l'envoi de l'image", `Détails : ${error.message || JSON.stringify(error)}`);
         return null;
       }
 
