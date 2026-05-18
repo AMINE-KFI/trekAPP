@@ -249,8 +249,19 @@ export default function AddItem() {
       const fileName = `${user.id}_${Date.now()}.${fileExt}`;
       const filePath = `${fileName}`;
 
-      const response = await fetch(uri);
-      const blob = await response.blob();
+      const blob = await new Promise<Blob>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.onload = function () {
+          resolve(xhr.response);
+        };
+        xhr.onerror = function (e) {
+          console.error("XHR local file read error:", e);
+          reject(new Error("Impossible de lire le fichier photo local."));
+        };
+        xhr.responseType = 'blob';
+        xhr.open('GET', uri, true);
+        xhr.send(null);
+      });
 
       const { error } = await supabase.storage
         .from('equipments')
