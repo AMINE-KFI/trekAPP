@@ -14,6 +14,36 @@ const isLocalUri = (uri: string) => {
   return uri.startsWith('file:') || uri.startsWith('content:') || !uri.startsWith('http');
 };
 
+const decodeBase64 = (base64: string): Uint8Array => {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  const lookup = new Uint8Array(256);
+  for (let i = 0; i < chars.length; i++) {
+    lookup[chars.charCodeAt(i)] = i;
+  }
+  
+  let bufferLength = base64.length * 0.75;
+  if (base64[base64.length - 1] === '=') {
+    bufferLength--;
+    if (base64[base64.length - 2] === '=') {
+      bufferLength--;
+    }
+  }
+  
+  const bytes = new Uint8Array(bufferLength);
+  let p = 0;
+  for (let i = 0; i < base64.length; i += 4) {
+    const encoded1 = lookup[base64.charCodeAt(i)];
+    const encoded2 = lookup[base64.charCodeAt(i + 1)];
+    const encoded3 = lookup[base64.charCodeAt(i + 2)];
+    const encoded4 = lookup[base64.charCodeAt(i + 3)];
+    
+    bytes[p++] = (encoded1 << 2) | (encoded2 >> 4);
+    bytes[p++] = ((encoded2 & 15) << 4) | (encoded3 >> 2);
+    bytes[p++] = ((encoded3 & 3) << 6) | (encoded4 & 63);
+  }
+  return bytes;
+};
+
 const getCategoryIcon = (catName: string) => {
   const meta = CATEGORIES_META[catName];
   if (meta) return meta.icon;
@@ -56,6 +86,7 @@ export default function AddItem() {
   const [weight, setWeight] = useState('');
   const [techInfo, setTechInfo] = useState('');
   const [imageUri, setImageUri] = useState<string | null>(null);
+  const [imageBase64, setImageBase64] = useState<string | null>(null);
   const [category, setCategory] = useState('Neutre');
   const [isConsumable, setIsConsumable] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -87,9 +118,11 @@ export default function AddItem() {
               allowsEditing: true,
               aspect: [4, 3],
               quality: 0.8,
+              base64: true,
             });
             if (!result.canceled) {
               setImageUri(result.assets[0].uri);
+              setImageBase64(result.assets[0].base64 || null);
             }
           }
         },
@@ -106,9 +139,11 @@ export default function AddItem() {
               allowsEditing: true,
               aspect: [4, 3],
               quality: 0.8,
+              base64: true,
             });
             if (!result.canceled) {
               setImageUri(result.assets[0].uri);
+              setImageBase64(result.assets[0].base64 || null);
             }
           }
         },
@@ -245,27 +280,25 @@ export default function AddItem() {
         return null;
       }
 
+      if (!imageBase64) {
+        Alert.alert("Erreur lors de l'envoi", "Les données de l'image ne sont pas disponibles.");
+        return null;
+      }
+
       const fileExt = uri.split('.').pop() || 'jpg';
       const fileName = `${user.id}_${Date.now()}.${fileExt}`;
       const filePath = `${fileName}`;
 
-      const blob = await new Promise<Blob>((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.onload = function () {
-          resolve(xhr.response);
-        };
-        xhr.onerror = function (e) {
-          console.error("XHR local file read error:", e);
-          reject(new Error("Impossible de lire le fichier photo local."));
-        };
-        xhr.responseType = 'blob';
-        xhr.open('GET', uri, true);
-        xhr.send(null);
-      });
+      let cleanBase64 = imageBase64;
+      if (cleanBase64.includes(';base64,')) {
+        cleanBase64 = cleanBase64.split(';base64,')[1];
+      }
+
+      const arrayBuffer = decodeBase64(cleanBase64);
 
       const { error } = await supabase.storage
         .from('equipments')
-        .upload(filePath, blob, {
+        .upload(filePath, arrayBuffer, {
           contentType: `image/${fileExt === 'png' ? 'png' : 'jpeg'}`,
           upsert: true
         });
@@ -281,9 +314,9 @@ export default function AddItem() {
         .getPublicUrl(filePath);
 
       return publicUrl;
-    } catch (err) {
+    } catch (err: any) {
       console.error("Unexpected upload error:", err);
-      Alert.alert("Erreur lors de l'envoi de l'image", "Une erreur est survenue pendant l'envoi de l'image.");
+      Alert.alert("Erreur lors de l'envoi de l'image", `Détails : ${err?.message || err}`);
       return null;
     } finally {
       setIsUploading(false);
