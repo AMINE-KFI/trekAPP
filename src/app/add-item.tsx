@@ -7,6 +7,12 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import { useInventory, CATEGORIES_META } from '../context/InventoryContext';
+import { supabase } from '../lib/supabase';
+
+const isLocalUri = (uri: string) => {
+  if (!uri) return false;
+  return uri.startsWith('file:') || uri.startsWith('content:') || !uri.startsWith('http');
+};
 
 const getCategoryIcon = (catName: string) => {
   const meta = CATEGORIES_META[catName];
@@ -52,6 +58,7 @@ export default function AddItem() {
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [category, setCategory] = useState('Neutre');
   const [isConsumable, setIsConsumable] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
 
   const [isBrowserOpen, setIsBrowserOpen] = useState(false);
   const webViewRef = useRef<WebView>(null);
@@ -228,13 +235,66 @@ export default function AddItem() {
     }
   };
 
-  const handleSave = () => {
+  const uploadImage = async (uri: string): Promise<string | null> => {
+    try {
+      setIsUploading(true);
+      
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        Alert.alert("Erreur", "Vous devez être connecté pour uploader des images.");
+        return null;
+      }
+
+      const fileExt = uri.split('.').pop() || 'jpg';
+      const fileName = `${user.id}_${Date.now()}.${fileExt}`;
+      const filePath = `${fileName}`;
+
+      const response = await fetch(uri);
+      const blob = await response.blob();
+
+      const { error } = await supabase.storage
+        .from('equipments')
+        .upload(filePath, blob, {
+          contentType: `image/${fileExt === 'png' ? 'png' : 'jpeg'}`,
+          upsert: true
+        });
+
+      if (error) {
+        console.error("Storage upload error:", error);
+        Alert.alert("Erreur lors de l'envoi de l'image", "Impossible d'enregistrer l'image sur le serveur.");
+        return null;
+      }
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('equipments')
+        .getPublicUrl(filePath);
+
+      return publicUrl;
+    } catch (err) {
+      console.error("Unexpected upload error:", err);
+      Alert.alert("Erreur lors de l'envoi de l'image", "Une erreur est survenue pendant l'envoi de l'image.");
+      return null;
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleSave = async () => {
     if (!name || !weight) {
-      alert('Le nom et le poids sont obligatoires.');
+      Alert.alert('Erreur', 'Le nom et le poids sont obligatoires.');
       return;
     }
 
     const formattedWeight = formatWeightToKg(weight);
+    let finalImageUri = imageUri;
+
+    if (imageUri && isLocalUri(imageUri)) {
+      const uploadedUrl = await uploadImage(imageUri);
+      if (!uploadedUrl) {
+        return;
+      }
+      finalImageUri = uploadedUrl;
+    }
     
     const data = {
       name,
@@ -243,7 +303,7 @@ export default function AddItem() {
       techInfo,
       category,
       isConsumable,
-      imageUri: imageUri || undefined,
+      imageUri: finalImageUri || undefined,
     };
 
     if (editId) {
@@ -514,6 +574,13 @@ export default function AddItem() {
           </Pressable>
         </Pressable>
       </Modal>
+
+      {isUploading && (
+        <View style={styles.uploadOverlay}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={[styles.uploadOverlayText, { color: '#FFFFFF' }]}>Envoi de l'image en cours...</Text>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
@@ -844,6 +911,18 @@ const styles = StyleSheet.create({
   },
   permissionBtnText: {
     color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  uploadOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 9999,
+  },
+  uploadOverlayText: {
+    marginTop: 16,
     fontSize: 16,
     fontWeight: '600',
   },
