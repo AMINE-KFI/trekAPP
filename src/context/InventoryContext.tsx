@@ -1,6 +1,6 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Appearance } from 'react-native';
+import { Appearance, Alert } from 'react-native';
+import { supabase } from '../lib/supabase';
 
 export type ThemeType = 'light' | 'dark' | 'automatic';
 export type WeightUnit = 'kg' | 'g';
@@ -172,57 +172,156 @@ export const InventoryProvider = ({ children }: { children: React.ReactNode }) =
   const isDark = theme === 'dark' || (theme === 'automatic' && systemColorScheme === 'dark');
   const colors = isDark ? darkColors : lightColors;
 
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        const storedItems = await AsyncStorage.getItem('@trekapp_items');
-        const storedPacks = await AsyncStorage.getItem('@trekapp_packs');
-        const storedTheme = await AsyncStorage.getItem('@trekapp_theme');
-        const storedUnit = await AsyncStorage.getItem('@trekapp_weightUnit');
-        const storedCats = await AsyncStorage.getItem('@trekapp_categories');
-        const storedTreks = await AsyncStorage.getItem('@trekapp_treks');
+  const loadDataFromSupabase = async (user: any) => {
+    try {
+      // 1. Fetch Items
+      const { data: dbItems, error: itemsErr } = await supabase
+        .from('items')
+        .select('*')
+        .eq('user_id', user.id);
         
-        if (storedItems) setItems(JSON.parse(storedItems));
-        else setItems(DEFAULT_ITEMS);
+      if (itemsErr) {
+        console.error('Error loading items:', itemsErr.message);
+      } else if (dbItems) {
+        const mappedItems = dbItems.map((item: any) => ({
+          id: item.id.toString(),
+          name: item.name,
+          weight: item.weight,
+          category: item.category,
+          isConsumable: item.is_consumable !== undefined ? item.is_consumable : (item.isConsumable || false),
+          brand: item.brand,
+          techInfo: item.tech_info !== undefined ? item.tech_info : item.techInfo,
+          imageUri: item.image_uri !== undefined ? item.image_uri : item.imageUri,
+        }));
+        setItems(mappedItems);
+      }
 
-        if (storedPacks) setPacks(JSON.parse(storedPacks));
-        if (storedTheme) setThemeState(storedTheme as ThemeType);
-        if (storedUnit) setWeightUnitState(storedUnit as WeightUnit);
-        if (storedCats) setCategoriesState(JSON.parse(storedCats));
-        if (storedTreks) setTreks(JSON.parse(storedTreks));
-      } catch (e) {
-        console.error('Failed to load data', e);
-      } finally {
+      // 2. Fetch Packs
+      const { data: dbPacks, error: packsErr } = await supabase
+        .from('packs')
+        .select('*')
+        .eq('user_id', user.id);
+
+      if (packsErr) {
+        console.error('Error loading packs:', packsErr.message);
+      } else if (dbPacks) {
+        const mappedPacks = dbPacks.map((p: any) => ({
+          id: p.id.toString(),
+          name: p.name,
+          items: Array.isArray(p.items) ? p.items : (typeof p.items === 'string' ? JSON.parse(p.items) : []),
+        }));
+        setPacks(mappedPacks);
+      }
+
+      // 3. Fetch Treks
+      const { data: dbTreks, error: treksErr } = await supabase
+        .from('treks')
+        .select('*')
+        .eq('user_id', user.id);
+
+      if (treksErr) {
+        console.error('Error loading treks:', treksErr.message);
+      } else if (dbTreks) {
+        const mappedTreks = dbTreks.map((t: any) => ({
+          id: t.id.toString(),
+          name: t.name,
+          date: t.date,
+          packId: t.pack_id !== undefined ? t.pack_id?.toString() : t.packId?.toString(),
+          checklistItems: Array.isArray(t.checklist_items) ? t.checklist_items : (typeof t.checklist_items === 'string' ? JSON.parse(t.checklist_items) : []),
+        }));
+        setTreks(mappedTreks);
+      }
+
+      // 4. Fetch Profile Settings
+      const { data: profile, error: profileErr } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+
+      if (profile) {
+        if (profile.theme) setThemeState(profile.theme as ThemeType);
+        if (profile.weight_unit) setWeightUnitState(profile.weight_unit as WeightUnit);
+        else if (profile.weightUnit) setWeightUnitState(profile.weightUnit as WeightUnit);
+        
+        if (profile.categories) {
+          try {
+            setCategoriesState(Array.isArray(profile.categories) ? profile.categories : JSON.parse(profile.categories));
+          } catch (e) {
+            console.error('Failed to parse categories:', e);
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Unexpected error loading data from Supabase:', e);
+    } finally {
+      setIsLoaded(true);
+    }
+  };
+
+  useEffect(() => {
+    let subscription: any = null;
+
+    const setupAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        await loadDataFromSupabase(session.user);
+      } else {
         setIsLoaded(true);
       }
+
+      const { data: { subscription: sub } } = supabase.auth.onAuthStateChange(async (event, session) => {
+        if (session?.user) {
+          await loadDataFromSupabase(session.user);
+        } else {
+          setItems([]);
+          setPacks([]);
+          setTreks([]);
+          setIsLoaded(true);
+        }
+      });
+      subscription = sub;
     };
-    loadData();
+
+    setupAuth();
+
+    return () => {
+      if (subscription) {
+        subscription.unsubscribe();
+      }
+    };
   }, []);
 
-  useEffect(() => {
-    if (isLoaded) {
-      AsyncStorage.setItem('@trekapp_items', JSON.stringify(items));
-      AsyncStorage.setItem('@trekapp_packs', JSON.stringify(packs));
-      AsyncStorage.setItem('@trekapp_theme', theme);
-      AsyncStorage.setItem('@trekapp_weightUnit', weightUnit);
-      AsyncStorage.setItem('@trekapp_categories', JSON.stringify(categories));
-      AsyncStorage.setItem('@trekapp_treks', JSON.stringify(treks));
+  const saveCategoriesToSupabase = async (cats: string[]) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      await supabase.from('profiles').update({ categories: cats }).eq('id', user.id);
     }
-  }, [items, packs, theme, weightUnit, categories, treks, isLoaded]);
+  };
 
-  const setTheme = (t: ThemeType) => setThemeState(t);
-  const setWeightUnit = (u: WeightUnit) => setWeightUnitState(u);
+  const setTheme = async (t: ThemeType) => {
+    setThemeState(t);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      await supabase.from('profiles').update({ theme: t }).eq('id', user.id);
+    }
+  };
+
+  const setWeightUnit = async (u: WeightUnit) => {
+    setWeightUnitState(u);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      await supabase.from('profiles').update({ weight_unit: u, weightUnit: u }).eq('id', user.id);
+    }
+  };
 
   const formatDisplayWeight = (weightStr: string) => {
     if (!weightStr) return '';
-    // Assuming weightStr is stored internally as "1.5 kg" (from add-item logic)
     const numMatch = weightStr.match(/([0-9.,]+)/);
     if (!numMatch) return weightStr;
     const num = parseFloat(numMatch[1].replace(',', '.'));
     if (isNaN(num)) return weightStr;
 
-    // Convert from kg to requested unit
-    // Since we enforce formatWeightToKg in save, it's always in kg in the state.
     if (weightUnit === 'g') {
       return Math.round(num * 1000) + ' g';
     }
@@ -232,12 +331,16 @@ export const InventoryProvider = ({ children }: { children: React.ReactNode }) =
   const addCategory = (cat: string) => {
     const trimmed = cat.trim();
     if (trimmed && !categories.includes(trimmed)) {
-      setCategoriesState(prev => [...prev, trimmed]);
+      const newCats = [...categories, trimmed];
+      setCategoriesState(newCats);
+      saveCategoriesToSupabase(newCats);
     }
   };
 
   const removeCategory = (cat: string) => {
-    setCategoriesState(prev => prev.filter(c => c !== cat));
+    const newCats = categories.filter(c => c !== cat);
+    setCategoriesState(newCats);
+    saveCategoriesToSupabase(newCats);
   };
 
   const moveCategory = (index: number, direction: 'up' | 'down') => {
@@ -248,107 +351,408 @@ export const InventoryProvider = ({ children }: { children: React.ReactNode }) =
       nextCategories[index] = nextCategories[index - 1];
       nextCategories[index - 1] = temp;
       setCategoriesState(nextCategories);
+      saveCategoriesToSupabase(nextCategories);
     } else if (direction === 'down' && index < categories.length - 1) {
       const temp = nextCategories[index];
       nextCategories[index] = nextCategories[index + 1];
       nextCategories[index + 1] = temp;
       setCategoriesState(nextCategories);
+      saveCategoriesToSupabase(nextCategories);
     }
   };
 
-  const addItem = (item: InventoryItem) => setItems(prev => [item, ...prev]);
-  const deleteItem = (id: string) => setItems(prev => prev.filter(i => i.id !== id));
-  const updateItem = (id: string, updatedData: Partial<InventoryItem>) => setItems(prev => prev.map(i => i.id === id ? { ...i, ...updatedData } : i));
+  const addItem = async (item: InventoryItem) => {
+    setItems(prev => [item, ...prev]);
 
-  const addTrek = (name: string, date: string, packId: string) => {
-    setTreks(prev => [
-      {
-        id: Date.now().toString(),
-        name,
-        date,
-        packId,
-        checklistItems: []
-      },
-      ...prev
-    ]);
-  };
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      const { error } = await supabase.from('items').insert({
+        id: item.id,
+        user_id: user.id,
+        name: item.name,
+        weight: item.weight,
+        category: item.category,
+        is_consumable: item.isConsumable,
+        brand: item.brand,
+        tech_info: item.techInfo,
+        image_uri: item.imageUri,
+      });
 
-  const deleteTrek = (id: string) => {
-    setTreks(prev => prev.filter(t => t.id !== id));
-  };
-
-  const toggleChecklistItem = (trekId: string, itemId: string) => {
-    setTreks(prev => prev.map(t => {
-      if (t.id === trekId) {
-        return {
-          ...t,
-          checklistItems: t.checklistItems.map(item =>
-            item.id === itemId ? { ...item, checked: !item.checked } : item
-          )
-        };
+      if (error) {
+        Alert.alert('Erreur', "Impossible de sauvegarder l'équipement sur le cloud : " + error.message);
+        setItems(prev => prev.filter(i => i.id !== item.id));
       }
-      return t;
-    }));
+    }
   };
 
-  const addChecklistItem = (trekId: string, text: string) => {
-    setTreks(prev => prev.map(t => {
-      if (t.id === trekId) {
-        return {
-          ...t,
-          checklistItems: [
-            ...t.checklistItems,
-            { id: Date.now().toString(), text, checked: false }
-          ]
-        };
+  const deleteItem = async (id: string) => {
+    let previousItems: InventoryItem[] = [];
+    setItems(prev => {
+      previousItems = prev;
+      return prev.filter(i => i.id !== id);
+    });
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      const { error } = await supabase
+        .from('items')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', user.id);
+
+      if (error) {
+        Alert.alert('Erreur', "Impossible de supprimer l'équipement du cloud : " + error.message);
+        setItems(previousItems);
       }
-      return t;
-    }));
+    }
   };
 
-  const removeChecklistItem = (trekId: string, itemId: string) => {
-    setTreks(prev => prev.map(t => {
-      if (t.id === trekId) {
-        return {
-          ...t,
-          checklistItems: t.checklistItems.filter(item => item.id !== itemId)
-        };
+  const updateItem = async (id: string, updatedData: Partial<InventoryItem>) => {
+    let previousItems: InventoryItem[] = [];
+    setItems(prev => {
+      previousItems = prev;
+      return prev.map(i => i.id === id ? { ...i, ...updatedData } : i);
+    });
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      const dbData: any = {};
+      if (updatedData.name !== undefined) dbData.name = updatedData.name;
+      if (updatedData.weight !== undefined) dbData.weight = updatedData.weight;
+      if (updatedData.category !== undefined) dbData.category = updatedData.category;
+      if (updatedData.isConsumable !== undefined) dbData.is_consumable = updatedData.isConsumable;
+      if (updatedData.brand !== undefined) dbData.brand = updatedData.brand;
+      if (updatedData.techInfo !== undefined) dbData.tech_info = updatedData.techInfo;
+      if (updatedData.imageUri !== undefined) dbData.image_uri = updatedData.imageUri;
+
+      const { error } = await supabase
+        .from('items')
+        .update(dbData)
+        .eq('id', id)
+        .eq('user_id', user.id);
+
+      if (error) {
+        Alert.alert('Erreur', "Impossible de mettre à jour l'équipement sur le cloud : " + error.message);
+        setItems(previousItems);
       }
-      return t;
-    }));
+    }
   };
 
-  const addPack = (name: string) => setPacks(prev => [{ id: Date.now().toString(), name, items: [] }, ...prev]);
-  const deletePack = (id: string) => setPacks(prev => prev.filter(p => p.id !== id));
-  const updateItemQuantityInPack = (packId: string, item: InventoryItem, quantity: number) => {
-    setPacks(prev => prev.map(pack => {
-      if (pack.id === packId) {
-        if (quantity <= 0) return { ...pack, items: pack.items.filter(i => i.item.id !== item.id) };
-        const exists = pack.items.some(i => i.item.id === item.id);
-        if (exists) return { ...pack, items: pack.items.map(i => i.item.id === item.id ? { ...i, quantity } : i) };
-        return { ...pack, items: [...pack.items, { item, quantity }] };
+  const addTrek = async (name: string, date: string, packId: string) => {
+    const newTrek: Trek = {
+      id: Date.now().toString(),
+      name,
+      date,
+      packId,
+      checklistItems: []
+    };
+    setTreks(prev => [newTrek, ...prev]);
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      const { error } = await supabase.from('treks').insert({
+        id: newTrek.id,
+        user_id: user.id,
+        name: newTrek.name,
+        date: newTrek.date,
+        pack_id: newTrek.packId,
+        checklist_items: newTrek.checklistItems,
+      });
+
+      if (error) {
+        Alert.alert('Erreur', "Impossible de créer la sortie sur le cloud : " + error.message);
+        setTreks(prev => prev.filter(t => t.id !== newTrek.id));
       }
-      return pack;
-    }));
+    }
   };
 
-  const updatePackName = (packId: string, newName: string) => {
-    setPacks(prev => prev.map(p => p.id === packId ? { ...p, name: newName } : p));
+  const deleteTrek = async (id: string) => {
+    let previousTreks: Trek[] = [];
+    setTreks(prev => {
+      previousTreks = prev;
+      return prev.filter(t => t.id !== id);
+    });
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      const { error } = await supabase
+        .from('treks')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', user.id);
+
+      if (error) {
+        Alert.alert('Erreur', "Impossible de supprimer la sortie du cloud : " + error.message);
+        setTreks(previousTreks);
+      }
+    }
   };
 
-  const updateTrekName = (trekId: string, newName: string) => {
-    setTreks(prev => prev.map(t => t.id === trekId ? { ...t, name: newName } : t));
+  const toggleChecklistItem = async (trekId: string, itemId: string) => {
+    let updatedTrek: Trek | null = null;
+    let previousTreks: Trek[] = [];
+
+    setTreks(prev => {
+      previousTreks = prev;
+      return prev.map(t => {
+        if (t.id === trekId) {
+          updatedTrek = {
+            ...t,
+            checklistItems: t.checklistItems.map(item =>
+              item.id === itemId ? { ...item, checked: !item.checked } : item
+            )
+          };
+          return updatedTrek;
+        }
+        return t;
+      });
+    });
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user && updatedTrek) {
+      const { error } = await supabase
+        .from('treks')
+        .update({ checklist_items: (updatedTrek as Trek).checklistItems })
+        .eq('id', trekId)
+        .eq('user_id', user.id);
+
+      if (error) {
+        Alert.alert('Erreur', "Impossible de mettre à jour la checklist sur le cloud : " + error.message);
+        setTreks(previousTreks);
+      }
+    }
   };
 
-  const updateTrekPack = (trekId: string, newPackId: string) => {
-    setTreks(prev => prev.map(t => t.id === trekId ? { ...t, packId: newPackId } : t));
+  const addChecklistItem = async (trekId: string, text: string) => {
+    let updatedTrek: Trek | null = null;
+    let previousTreks: Trek[] = [];
+
+    setTreks(prev => {
+      previousTreks = prev;
+      return prev.map(t => {
+        if (t.id === trekId) {
+          updatedTrek = {
+            ...t,
+            checklistItems: [
+              ...t.checklistItems,
+              { id: Date.now().toString(), text, checked: false }
+            ]
+          };
+          return updatedTrek;
+        }
+        return t;
+      });
+    });
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user && updatedTrek) {
+      const { error } = await supabase
+        .from('treks')
+        .update({ checklist_items: (updatedTrek as Trek).checklistItems })
+        .eq('id', trekId)
+        .eq('user_id', user.id);
+
+      if (error) {
+        Alert.alert('Erreur', "Impossible d'ajouter l'élément sur le cloud : " + error.message);
+        setTreks(previousTreks);
+      }
+    }
+  };
+
+  const removeChecklistItem = async (trekId: string, itemId: string) => {
+    let updatedTrek: Trek | null = null;
+    let previousTreks: Trek[] = [];
+
+    setTreks(prev => {
+      previousTreks = prev;
+      return prev.map(t => {
+        if (t.id === trekId) {
+          updatedTrek = {
+            ...t,
+            checklistItems: t.checklistItems.filter(item => item.id !== itemId)
+          };
+          return updatedTrek;
+        }
+        return t;
+      });
+    });
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user && updatedTrek) {
+      const { error } = await supabase
+        .from('treks')
+        .update({ checklist_items: (updatedTrek as Trek).checklistItems })
+        .eq('id', trekId)
+        .eq('user_id', user.id);
+
+      if (error) {
+        Alert.alert('Erreur', "Impossible de supprimer l'élément du cloud : " + error.message);
+        setTreks(previousTreks);
+      }
+    }
+  };
+
+  const addPack = async (name: string) => {
+    const newPack: Pack = { id: Date.now().toString(), name, items: [] };
+    setPacks(prev => [newPack, ...prev]);
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      const { error } = await supabase.from('packs').insert({
+        id: newPack.id,
+        user_id: user.id,
+        name: newPack.name,
+        items: newPack.items,
+      });
+
+      if (error) {
+        Alert.alert('Erreur', "Impossible de créer le sac sur le cloud : " + error.message);
+        setPacks(prev => prev.filter(p => p.id !== newPack.id));
+      }
+    }
+  };
+
+  const deletePack = async (id: string) => {
+    let previousPacks: Pack[] = [];
+    setPacks(prev => {
+      previousPacks = prev;
+      return prev.filter(p => p.id !== id);
+    });
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      const { error } = await supabase
+        .from('packs')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', user.id);
+
+      if (error) {
+        Alert.alert('Erreur', "Impossible de supprimer le sac du cloud : " + error.message);
+        setPacks(previousPacks);
+      }
+    }
+  };
+
+  const updateItemQuantityInPack = async (packId: string, item: InventoryItem, quantity: number) => {
+    let updatedPack: Pack | null = null;
+    let previousPacks: Pack[] = [];
+
+    setPacks(prev => {
+      previousPacks = prev;
+      return prev.map(pack => {
+        if (pack.id === packId) {
+          let newItems = [...pack.items];
+          if (quantity <= 0) {
+            newItems = newItems.filter(i => i.item.id !== item.id);
+          } else {
+            const exists = newItems.some(i => i.item.id === item.id);
+            if (exists) {
+              newItems = newItems.map(i => i.item.id === item.id ? { ...i, quantity } : i);
+            } else {
+              newItems.push({ item, quantity });
+            }
+          }
+          updatedPack = { ...pack, items: newItems };
+          return updatedPack;
+        }
+        return pack;
+      });
+    });
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user && updatedPack) {
+      const { error } = await supabase
+        .from('packs')
+        .update({ items: (updatedPack as Pack).items })
+        .eq('id', packId)
+        .eq('user_id', user.id);
+
+      if (error) {
+        Alert.alert('Erreur', "Impossible de mettre à jour le contenu du sac sur le cloud : " + error.message);
+        setPacks(previousPacks);
+      }
+    }
+  };
+
+  const updatePackName = async (packId: string, newName: string) => {
+    let previousPacks: Pack[] = [];
+    setPacks(prev => {
+      previousPacks = prev;
+      return prev.map(p => p.id === packId ? { ...p, name: newName } : p);
+    });
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      const { error } = await supabase
+        .from('packs')
+        .update({ name: newName })
+        .eq('id', packId)
+        .eq('user_id', user.id);
+
+      if (error) {
+        Alert.alert('Erreur', "Impossible de renommer le sac sur le cloud : " + error.message);
+        setPacks(previousPacks);
+      }
+    }
+  };
+
+  const updateTrekName = async (trekId: string, newName: string) => {
+    let previousTreks: Trek[] = [];
+    setTreks(prev => {
+      previousTreks = prev;
+      return prev.map(t => t.id === trekId ? { ...t, name: newName } : t);
+    });
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      const { error } = await supabase
+        .from('treks')
+        .update({ name: newName })
+        .eq('id', trekId)
+        .eq('user_id', user.id);
+
+      if (error) {
+        Alert.alert('Erreur', "Impossible de renommer la sortie sur le cloud : " + error.message);
+        setTreks(previousTreks);
+      }
+    }
+  };
+
+  const updateTrekPack = async (trekId: string, newPackId: string) => {
+    let previousTreks: Trek[] = [];
+    setTreks(prev => {
+      previousTreks = prev;
+      return prev.map(t => t.id === trekId ? { ...t, packId: newPackId } : t);
+    });
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      const { error } = await supabase
+        .from('treks')
+        .update({ pack_id: newPackId })
+        .eq('id', trekId)
+        .eq('user_id', user.id);
+
+      if (error) {
+        Alert.alert('Erreur', "Impossible de lier le sac à la sortie sur le cloud : " + error.message);
+        setTreks(previousTreks);
+      }
+    }
   };
 
   const clearAllData = async () => {
     try {
-      await AsyncStorage.removeItem('@trekapp_items');
-      await AsyncStorage.removeItem('@trekapp_packs');
-      await AsyncStorage.removeItem('@trekapp_treks');
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { error: itemsErr } = await supabase.from('items').delete().eq('user_id', user.id);
+        const { error: packsErr } = await supabase.from('packs').delete().eq('user_id', user.id);
+        const { error: treksErr } = await supabase.from('treks').delete().eq('user_id', user.id);
+
+        if (itemsErr || packsErr || treksErr) {
+          Alert.alert('Erreur', "Une erreur est survenue lors de la réinitialisation sur le cloud.");
+        }
+      }
       setItems([]);
       setPacks([]);
       setTreks([]);

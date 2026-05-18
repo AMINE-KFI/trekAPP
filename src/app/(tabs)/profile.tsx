@@ -1,10 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ThemeType, useInventory, WeightUnit } from '../../context/InventoryContext';
+import { useRouter } from 'expo-router';
+import { supabase } from '../../lib/supabase';
 
 export default function Profile() {
+  const router = useRouter();
   const {
     clearAllData,
     theme,
@@ -20,6 +23,69 @@ export default function Profile() {
 
   const [newCat, setNewCat] = useState('');
   const [categoriesModalVisible, setCategoriesModalVisible] = useState(false);
+  const [profileModalVisible, setProfileModalVisible] = useState(false);
+  const [editingName, setEditingName] = useState('');
+  const [user, setUser] = useState<any>(null);
+
+  useEffect(() => {
+    const fetchUser = async () => {
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      setUser(currentUser);
+    };
+    fetchUser();
+  }, []);
+
+  const handleOpenEditProfile = () => {
+    setEditingName(user?.user_metadata?.full_name || '');
+    setProfileModalVisible(true);
+  };
+
+  const updateProfile = async (newName: string) => {
+    if (!newName.trim()) {
+      Alert.alert("Erreur", "Le nom ne peut pas être vide.");
+      return;
+    }
+
+    try {
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      if (!currentUser) return;
+
+      const { error: authErr } = await supabase.auth.updateUser({
+        data: { full_name: newName.trim() }
+      });
+
+      if (authErr) {
+        Alert.alert("Erreur", "Impossible de mettre à jour le profil : " + authErr.message);
+        return;
+      }
+
+      const { error: dbErr } = await supabase
+        .from('profiles')
+        .update({ full_name: newName.trim() })
+        .eq('id', currentUser.id);
+
+      if (dbErr) {
+        console.error("Database profiles update error:", dbErr.message);
+      }
+
+      const { data: { user: updatedUser } } = await supabase.auth.getUser();
+      setUser(updatedUser);
+      setProfileModalVisible(false);
+      Alert.alert("Succès", "Votre profil a été mis à jour avec succès !");
+    } catch (e: any) {
+      console.error("Unexpected profile update error:", e);
+      Alert.alert("Erreur", "Une erreur inattendue est survenue.");
+    }
+  };
+
+  const handleLogout = async () => {
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      Alert.alert("Erreur", error.message);
+    } else {
+      router.replace('/(auth)/login');
+    }
+  };
 
   const handleClearData = () => {
     Alert.alert(
@@ -60,11 +126,21 @@ export default function Profile() {
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <View style={[styles.accountRow, { borderBottomColor: colors.border }]}>
             <View style={[styles.avatar, { backgroundColor: colors.primary + '20' }]}>
-              <Text style={[styles.avatarText, { color: colors.primary }]}>AK</Text>
+              <Text style={[styles.avatarText, { color: colors.primary }]}>
+                {user ? (
+                  user.user_metadata?.full_name
+                    ? user.user_metadata.full_name.split(' ').map((n: string) => n[0]).join('').toUpperCase()
+                    : user.email?.substring(0, 2).toUpperCase()
+                ) : '...'}
+              </Text>
             </View>
             <View style={styles.accountInfo}>
-              <Text style={[styles.accountName, { color: colors.text }]}>Amine KFI</Text>
-              <Text style={[styles.accountEmail, { color: colors.subText }]}>amine.kfi@example.com</Text>
+              <Text style={[styles.accountName, { color: colors.text }]}>
+                {user ? (user.user_metadata?.full_name || 'Randonneur') : 'Chargement...'}
+              </Text>
+              <Text style={[styles.accountEmail, { color: colors.subText }]}>
+                {user ? user.email : ''}
+              </Text>
             </View>
           </View>
           <Pressable
@@ -72,7 +148,7 @@ export default function Profile() {
               styles.cardRow,
               { opacity: pressed ? 0.7 : 1 }
             ]}
-            onPress={() => Alert.alert("Modifier le profil", "Fonctionnalité en cours de développement (Version Bêta)")}
+            onPress={handleOpenEditProfile}
           >
             <View style={styles.rowLeft}>
               <Ionicons name="person-outline" size={18} color={colors.primary} style={styles.rowIcon} />
@@ -234,10 +310,10 @@ export default function Profile() {
           ]}
           onPress={() => Alert.alert(
             "Se déconnecter ?",
-            "Voulez-vous vous déconnecter de votre compte bêta ?",
+            "Voulez-vous vous déconnecter de votre compte ?",
             [
               { text: "Annuler", style: "cancel" },
-              { text: "Se déconnecter", style: "destructive", onPress: () => Alert.alert("Au revoir", "Déconnecté avec succès.") }
+              { text: "Se déconnecter", style: "destructive", onPress: handleLogout }
             ]
           )}
         >
@@ -311,6 +387,55 @@ export default function Profile() {
                   <Ionicons name="add" size={22} color="#FFFFFF" />
                 </Pressable>
               </View>
+            </View>
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
+
+      {/* MODAL DE GESTION DU PROFIL */}
+      <Modal
+        visible={profileModalVisible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setProfileModalVisible(false)}
+      >
+        <SafeAreaView style={[styles.modalContainer, { backgroundColor: colors.background }]} edges={['top']}>
+          <View style={[styles.modalHeader, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+            <Text style={[styles.modalHeaderTitle, { color: colors.text }]}>Modifier le profil</Text>
+            <Pressable onPress={() => setProfileModalVisible(false)} style={styles.modalCloseBtn}>
+              <Text style={[styles.modalCloseText, { color: colors.primary }]}>Annuler</Text>
+            </Pressable>
+          </View>
+
+          <ScrollView contentContainerStyle={styles.modalScroll} showsVerticalScrollIndicator={false}>
+            <Text style={[styles.sectionTitle, { color: colors.subText, marginLeft: 4, marginBottom: 8 }]}>Informations personnelles</Text>
+            <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, padding: 16, gap: 14 }]}>
+              <View style={{ marginBottom: 12 }}>
+                <Text style={{ fontSize: 12, fontWeight: '600', color: colors.subText, marginBottom: 6 }}>Nom complet</Text>
+                <TextInput
+                  style={[styles.addCatInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]}
+                  placeholder="Nom complet"
+                  placeholderTextColor={colors.subText}
+                  value={editingName}
+                  onChangeText={setEditingName}
+                />
+              </View>
+              
+              <Pressable 
+                style={({ pressed }) => [
+                  styles.logoutBtn, 
+                  { 
+                    backgroundColor: colors.primary, 
+                    borderColor: 'transparent',
+                    marginTop: 10,
+                    opacity: pressed ? 0.8 : 1 
+                  }
+                ]}
+                onPress={() => updateProfile(editingName)}
+              >
+                <Ionicons name="checkmark-circle-outline" size={20} color="#FFFFFF" />
+                <Text style={[styles.logoutText, { color: '#FFFFFF' }]}>Enregistrer les modifications</Text>
+              </Pressable>
             </View>
           </ScrollView>
         </SafeAreaView>

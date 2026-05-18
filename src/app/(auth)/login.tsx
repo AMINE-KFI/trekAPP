@@ -1,12 +1,42 @@
-import { View, Text, TextInput, StyleSheet, Pressable, KeyboardAvoidingView, ScrollView, Platform } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, TextInput, StyleSheet, Pressable, KeyboardAvoidingView, ScrollView, Platform, Alert, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useInventory } from '../../context/InventoryContext';
+import { supabase } from '../../lib/supabase';
 
 export default function Login() {
   const router = useRouter();
   const { colors } = useInventory();
+
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleLogin = async () => {
+    if (!email || !password) {
+      Alert.alert('Erreur', 'Veuillez remplir tous les champs (Email et Mot de passe).');
+      return;
+    }
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) {
+        Alert.alert('Erreur de connexion', error.message);
+      } else {
+        router.replace('/(tabs)');
+      }
+    } catch (err: any) {
+      Alert.alert('Erreur', err.message || 'Une erreur est survenue.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
@@ -46,16 +76,28 @@ export default function Login() {
                 placeholderTextColor={colors.subText}
                 keyboardType="email-address"
                 autoCapitalize="none"
+                value={email}
+                onChangeText={setEmail}
               />
               <TextInput
                 style={[styles.input, { backgroundColor: colors.card, color: colors.text, borderWidth: 1, borderColor: colors.border }]}
                 placeholder="Mot de passe"
                 placeholderTextColor={colors.subText}
                 secureTextEntry
+                value={password}
+                onChangeText={setPassword}
               />
               
-              <Pressable style={[styles.button, { backgroundColor: colors.primary, shadowColor: colors.primary }]} onPress={() => router.replace('/(tabs)')}>
-                <Text style={styles.buttonText}>Se connecter</Text>
+              <Pressable 
+                style={[styles.button, { backgroundColor: colors.primary, shadowColor: colors.primary }, loading && { opacity: 0.7 }]} 
+                onPress={handleLogin}
+                disabled={loading}
+              >
+                {loading ? (
+                  <ActivityIndicator color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.buttonText}>Se connecter</Text>
+                )}
               </Pressable>
               
               <Pressable style={styles.linkButton} onPress={() => router.push('/(auth)/signup')}>
@@ -68,6 +110,7 @@ export default function Login() {
     </SafeAreaView>
   );
 }
+
 
 
 const styles = StyleSheet.create({

@@ -1,9 +1,10 @@
 import { View, Text, StyleSheet, FlatList, TextInput, Pressable, Image, ScrollView, Alert, Modal } from 'react-native';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useInventory, CATEGORIES_META } from '../../context/InventoryContext';
+import { supabase } from '../../lib/supabase';
 
 export default function Inventory() {
   const { items, packs, deleteItem, colors, formatDisplayWeight, categories } = useInventory();
@@ -13,9 +14,24 @@ export default function Inventory() {
   const [activeFilters, setActiveFilters] = useState<string[]>([]);
   const [isFilterModalVisible, setIsFilterModalVisible] = useState(false);
   const [tempFilters, setTempFilters] = useState<string[]>([]);
+  const [user, setUser] = useState<any>(null);
 
-  const userName = "Amine KFI"; // Renseigné pour la démo bêta
-  const greeting = userName ? `Bonjour, ${userName}` : "Bonjour, Randonneur";
+  useEffect(() => {
+    const fetchUser = async () => {
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      setUser(currentUser);
+    };
+    fetchUser();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user || null);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const userName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || "Randonneur";
+  const greeting = `Bonjour, ${userName}`;
 
   const confirmDelete = (id: string) => {
     Alert.alert(
@@ -98,7 +114,9 @@ export default function Inventory() {
       <View style={styles.profileSection}>
         <View style={[styles.avatar, { backgroundColor: colors.primary + '20' }]}>
           <Text style={[styles.avatarText, { color: colors.primary }]}>
-            {userName ? userName.split(' ').map(n => n[0]).join('') : 'R'}
+            {userName && userName !== 'Randonneur'
+              ? userName.split(' ').map((n: string) => n[0]).join('').toUpperCase()
+              : 'R'}
           </Text>
         </View>
         <View style={styles.profileInfo}>
