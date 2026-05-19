@@ -28,8 +28,6 @@ export default function Login() {
 
       if (error) {
         Alert.alert('Erreur de connexion', error.message);
-      } else {
-        router.replace('/(tabs)');
       }
     } catch (err: any) {
       Alert.alert('Erreur', err.message || 'Une erreur est survenue.');

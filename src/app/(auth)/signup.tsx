@@ -37,8 +37,7 @@ export default function Signup() {
       } else {
         Alert.alert(
           'Compte créé !',
-          'Vérifie tes emails pour confirmer ton compte et pouvoir te connecter.',
-          [{ text: 'OK', onPress: () => router.replace('/(auth)/login') }]
+          'Vérifie tes emails pour confirmer ton compte et pouvoir te connecter.'
         );
       }
     } catch (err: any) {

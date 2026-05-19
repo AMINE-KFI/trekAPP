@@ -82,8 +82,6 @@ export default function Profile() {
     const { error } = await supabase.auth.signOut();
     if (error) {
       Alert.alert("Erreur", error.message);
-    } else {
-      router.replace('/(auth)/login');
     }
   };
 
